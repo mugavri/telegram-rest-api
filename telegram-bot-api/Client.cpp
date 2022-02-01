@@ -2855,7 +2855,7 @@ class Client::JsonChatInviteLinkCount : public Jsonable {
   void store(JsonValueScope *scope) const {
     auto object = scope->enter_object();
     object("user_id", chat_invite_link_count_->user_id_);
-    // object("creator", JsonUser(chat_invite_link_count_->user_id_, client_));
+    object("creator", JsonUser(chat_invite_link_count_->user_id_, client_));
     object("invite_link_count", chat_invite_link_count_->invite_link_count_);
     object("revoked_invite_link_count", chat_invite_link_count_->revoked_invite_link_count_);
   }
@@ -2966,10 +2966,10 @@ class Client::JsonChatInviteLinkInfo : public Jsonable {
     object("photo", JsonChatPhotoInfo(chat_invite_link_info_->photo_.get()));
     object("member_count", chat_invite_link_info_->member_count_);
     object("member_user_ids", td::json_array(chat_invite_link_info_->member_user_ids_,
-                                             [](int32 member_user_id) { return member_user_id; }));
+                                             [](int64 member_user_id) { return member_user_id; }));
     object("members",
            td::json_array(chat_invite_link_info_->member_user_ids_,
-                          [client = client_](int32 member_user_id) { return JsonUser(member_user_id, client); }));
+                          [client = client_](int64 member_user_id) { return JsonUser(member_user_id, client); }));
     object("is_public", td::JsonBool(chat_invite_link_info_->is_public_));
   }
 
@@ -9566,6 +9566,8 @@ td::Status Client::process_get_chat_invite_link_counts(PromisedQueryPtr &query) 
 
 td::Result<td_api::object_ptr<td_api::chatInviteLinkMember>> Client::get_chat_invite_link_member(const Query *query,
                                                                                                  Slice field_name) {
+  object_ptr<td_api::chatInviteLinkMember> result;
+
   if (query->has_arg(field_name)) {
     auto r_value = json_decode(query->arg(field_name));
     if (r_value.is_error()) {
@@ -9579,10 +9581,12 @@ td::Result<td_api::object_ptr<td_api::chatInviteLinkMember>> Client::get_chat_in
     }
     auto &object = value.get_object();
 
-    TRY_RESULT(user_id, get_json_object_int_field(object, "user_id"));
+    TRY_RESULT(user_id, get_json_object_long_field(object, "user_id"));
     TRY_RESULT(joined_chat_date, get_json_object_int_field(object, "joined_chat_date"));
+    TRY_RESULT(approver_user_id, get_json_object_long_field(object, "approver_user_id"));
 
-    return make_object<td_api::chatInviteLinkMember>(user_id, joined_chat_date);
+    result = make_object<td_api::chatInviteLinkMember>(user_id, joined_chat_date, approver_user_id);
+    return std::move(result);
   }
 
   return nullptr;
@@ -9593,15 +9597,16 @@ td::Status Client::process_get_chat_invite_link_members(PromisedQueryPtr &query)
 
   auto chat_id = query->arg("chat_id");
   auto invite_link = query->arg("invite_link");
-  // TRY_RESULT(offset_member, get_chat_invite_link_member(query.get()));
+  TRY_RESULT(offset_member, get_chat_invite_link_member(query.get()));
   auto limit = get_integer_arg(query.get(), "limit", 0, 0);
 
-  check_chat(
-      chat_id, AccessRights::Write, std::move(query),
-      [this, invite_link = invite_link.str(), offset_member = nullptr, limit](int64 chat_id, PromisedQueryPtr query) {
-        send_request(make_object<td_api::getChatInviteLinkMembers>(chat_id, invite_link, offset_member, limit),
-                     std::make_unique<TdOnGetChatInviteLinkMembersCallback>(this, std::move(query)));
-      });
+  check_chat(chat_id, AccessRights::Write, std::move(query),
+             [this, invite_link, offset_member = std::move(offset_member), limit](int64 chat_id,
+                                                                                  PromisedQueryPtr query) mutable {
+               send_request(make_object<td_api::getChatInviteLinkMembers>(chat_id, invite_link.str(),
+                                                                          std::move(offset_member), limit),
+                            std::make_unique<TdOnGetChatInviteLinkMembersCallback>(this, std::move(query)));
+             });
   return Status::OK();
 }
 
