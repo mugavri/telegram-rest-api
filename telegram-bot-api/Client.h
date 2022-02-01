@@ -169,6 +169,14 @@ class Client : public WebhookActor::Callback {
   class JsonMessagesArray;
   class JsonProxy;
   class JsonProxiesArray;
+
+  // my custom Json objects
+  class JsonChatInviteLinks;
+  class JsonChatInviteLinkCount;
+  class JsonChatInviteLinkMember;
+  class JsonChatInviteLinkMembers;
+  class JsonChatInviteLinkInfo;
+
   //stop custom Json objects
 
   class TdOnOkCallback;
@@ -215,6 +223,15 @@ class Client : public WebhookActor::Callback {
   class TdOnGetCallbackQueryAnswerCallback;
   class TdOnGetProxiesQueryCallback;
   class TdOnAddProxyQueryCallback;
+
+  // my custom callbacks
+  template <class OnSuccess>
+  class TdOngetChatInviteLinkCountsCallbackOnSuccess;
+
+  class TdOnGetChatInviteLinkCountsCallback;
+  class TdOnGetChatInviteLinkMembersCallback;
+  class TdOnCheckChatInviteLinkCallback;
+
   //end custom callbacks
 
   void on_get_reply_message(int64 chat_id, object_ptr<td_api::message> reply_to_message);
@@ -290,6 +307,9 @@ class Client : public WebhookActor::Callback {
 
   template <class OnSuccess>
   void optimize_memory(PromisedQueryPtr query, OnSuccess on_success);
+
+  template <class OnSuccess>
+  void get_chat_invite_link_counts(int64 chat_id, PromisedQueryPtr query, OnSuccess on_success);
 
   void enable_internet_connection(PromisedQueryPtr query);
 
@@ -451,7 +471,8 @@ class Client : public WebhookActor::Callback {
   td::Result<td::vector<object_ptr<td_api::InputMessageContent>>> get_input_message_contents(
       const Query *query, td::JsonValue &&value) const;
 
-  static object_ptr<td_api::messageSendOptions> get_message_send_options(bool disable_notification, object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
+  static object_ptr<td_api::messageSendOptions> get_message_send_options(
+      bool disable_notification, object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
 
   static td::Result<td::vector<td::string>> get_poll_options(const Query *query);
 
@@ -484,6 +505,9 @@ class Client : public WebhookActor::Callback {
 
   static td::Result<td_api::object_ptr<td_api::SearchMessagesFilter>> get_search_messages_filter(
       const Query *query, Slice field_name = Slice("filter"));
+
+  static td::Result<td_api::object_ptr<td_api::chatInviteLinkMember>> get_chat_invite_link_member(
+      const Query *query, Slice field_name = Slice("offset_member"));
 
   // end custom helper methods
 
@@ -609,6 +633,14 @@ class Client : public WebhookActor::Callback {
   void process_2fapassword_query(PromisedQueryPtr &query);
   void process_register_user_query(PromisedQueryPtr &query);
 
+  // my custom methods
+  Status process_get_chat_invite_link(PromisedQueryPtr &query);
+  Status process_get_chat_invite_links(PromisedQueryPtr &query);
+  Status process_get_chat_invite_link_counts(PromisedQueryPtr &query);
+  Status process_get_chat_invite_link_members(PromisedQueryPtr &query);
+  Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
+
+  Status process_check_chat_invite_link(PromisedQueryPtr &query);
 
   void webhook_verified(td::string cached_ip_address) override;
   void webhook_success() override;

@@ -313,6 +313,16 @@ bool Client::init_methods() {
   methods_.emplace("getscheduledmessages", &Client::process_get_scheduled_messages_query);
   methods_.emplace("editmessagescheduling", &Client::process_edit_message_scheduling_query);
 
+  //my custom methods
+  methods_.emplace("getchatinvitelink", &Client::process_get_chat_invite_link);
+  methods_.emplace("getchatinvitelinks", &Client::process_get_chat_invite_links);
+  methods_.emplace("getchatinvitelinkcounts", &Client::process_get_chat_invite_link_counts);
+  methods_.emplace("getchatinvitelinkmembers", &Client::process_get_chat_invite_link_members);
+
+  methods_.emplace("getchatinvitelinksfulldata", &Client::process_get_chat_invite_links_full_data);
+
+  methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link);
+
   return true;
 }
 
@@ -609,13 +619,13 @@ class Client::JsonChatInviteLink : public Jsonable {
   void store(JsonValueScope *scope) const {
     auto object = scope->enter_object();
     object("invite_link", chat_invite_link_->invite_link_);
+    object("creator_user_id", chat_invite_link_->creator_user_id_);
     object("creator", JsonUser(chat_invite_link_->creator_user_id_, client_));
-    if (chat_invite_link_->expire_date_ != 0) {
-      object("expire_date", chat_invite_link_->expire_date_);
-    }
-    if (chat_invite_link_->member_limit_ != 0) {
-      object("member_limit", chat_invite_link_->member_limit_);
-    }
+    object("date", chat_invite_link_->date_);
+    object("expire_date", chat_invite_link_->expire_date_);
+    object("edit_date", chat_invite_link_->edit_date_);
+    object("member_limit", chat_invite_link_->member_limit_);
+    object("member_count", chat_invite_link_->member_count_);
     object("is_primary", td::JsonBool(chat_invite_link_->is_primary_));
     object("is_revoked", td::JsonBool(chat_invite_link_->is_revoked_));
   }
@@ -801,7 +811,6 @@ class Client::JsonChat : public Jsonable {
       object("distance", td::JsonInt(distance_));
     }
     // end custom properties impl
-
   }
 
  private:
@@ -2675,7 +2684,8 @@ class Client::JsonChatsNearby : public Jsonable {
 
 class Client::JsonMessagesArray : public Jsonable {
  public:
-  explicit JsonMessagesArray(object_ptr<td_api::messages> &messages, Client *client) : messages_(messages), client_(client) {
+  explicit JsonMessagesArray(object_ptr<td_api::messages> &messages, Client *client)
+      : messages_(messages), client_(client) {
   }
   void store(JsonValueScope *scope) const {
     auto array = scope->enter_array();
@@ -2704,30 +2714,24 @@ class Client::JsonProxy : public Jsonable {
     object("server", proxy_->server_);
     object("port", proxy_->port_);
     switch (proxy_->type_->get_id()) {
-    case td_api::proxyTypeSocks5::ID:
-      {
+      case td_api::proxyTypeSocks5::ID: {
         auto ptype = static_cast<td_api::proxyTypeSocks5 *>(proxy_->type_.get());
         object("type", "socks5");
         object("username", ptype->username_);
         object("password", ptype->password_);
-      }
-      break;
-    case td_api::proxyTypeMtproto::ID:
-      {
+      } break;
+      case td_api::proxyTypeMtproto::ID: {
         auto ptype = static_cast<td_api::proxyTypeMtproto *>(proxy_->type_.get());
         object("type", "mtproto");
         object("secret", ptype->secret_);
-      }
-      break;
-    case td_api::proxyTypeHttp::ID:
-      {
+      } break;
+      case td_api::proxyTypeHttp::ID: {
         auto ptype = static_cast<td_api::proxyTypeHttp *>(proxy_->type_.get());
         object("type", "http");
         object("username", ptype->username_);
         object("password", ptype->password_);
         object("http_only", td::JsonBool(ptype->http_only_));
-      }
-      break;
+      } break;
     };
   }
 
@@ -2750,6 +2754,156 @@ class Client::JsonProxiesArray : public Jsonable {
   object_ptr<td_api::proxies> &proxies_;
 };
 
+// start my custom objects
+
+class Client::JsonChatInviteLinks : public Jsonable {
+ public:
+  JsonChatInviteLinks(const td_api::chatInviteLinks *chat_invite_links, const Client *client)
+      : chat_invite_links_(chat_invite_links), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("total_count", chat_invite_links_->total_count_);
+    object("invite_links", td::json_array(chat_invite_links_->invite_links_, [client = client_](auto &invite_link) {
+             return JsonChatInviteLink(invite_link.get(), client);
+           }));
+  }
+
+ private:
+  const td_api::chatInviteLinks *chat_invite_links_;
+  const Client *client_;
+};
+
+class Client::JsonChatInviteLinkCount : public Jsonable {
+ public:
+  JsonChatInviteLinkCount(const td_api::chatInviteLinkCount *chat_invite_link_count, const Client *client)
+      : chat_invite_link_count_(chat_invite_link_count), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("user_id", chat_invite_link_count_->user_id_);
+    // object("creator", JsonUser(chat_invite_link_count_->user_id_, client_));
+    object("invite_link_count", chat_invite_link_count_->invite_link_count_);
+    object("revoked_invite_link_count", chat_invite_link_count_->revoked_invite_link_count_);
+  }
+
+ private:
+  const td_api::chatInviteLinkCount *chat_invite_link_count_;
+  const Client *client_;
+};
+
+class Client::JsonChatInviteLinkMember : public Jsonable {
+ public:
+  JsonChatInviteLinkMember(const td_api::chatInviteLinkMember *chat_invite_link_member, const Client *client)
+      : chat_invite_link_member_(chat_invite_link_member), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("user_id", chat_invite_link_member_->user_id_);
+    object("user", JsonUser(chat_invite_link_member_->user_id_, client_));
+    object("joined_chat_date", chat_invite_link_member_->joined_chat_date_);
+  }
+
+ private:
+  const td_api::chatInviteLinkMember *chat_invite_link_member_;
+  const Client *client_;
+};
+
+class Client::JsonChatInviteLinkMembers : public Jsonable {
+ public:
+  JsonChatInviteLinkMembers(const td_api::chatInviteLinkMembers *chat_invite_link_members, const Client *client)
+      : chat_invite_link_members_(chat_invite_link_members), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("total_count", chat_invite_link_members_->total_count_);
+    object("members", td::json_array(chat_invite_link_members_->members_, [client = client_](auto &member) {
+             return JsonChatInviteLinkMember(member.get(), client);
+           }));
+  }
+
+ private:
+  const td_api::chatInviteLinkMembers *chat_invite_link_members_;
+  const Client *client_;
+};
+
+// class Client::JsonChatType : public Jsonable {
+//  public:
+//   JsonChatType(const td_api::ChatType *chat_type) : chat_type_(chat_type), {
+//   }
+
+//   void store(JsonValueScope *scope) const {
+//     auto object = scope->enter_object();
+
+//     switch (chat_type_->get_id()) {
+//       case td_api::chatTypePrivate::ID: {
+//         object("type", "private");
+//         object("id", chat_type_->user_id_);
+//         break;
+//       }
+//       case td_api::chatTypeBasicGroup::ID: {
+//         object("type", "basic_group");
+//         object("id", chat_type_->basic_group_id_);
+//         break;
+//       }
+//       default:
+//         object("type", "unknown");
+//         break;
+//     }
+//   }
+
+// private:
+// const td_api::ChatType *chat_type_;
+// };
+
+class Client::JsonChatInviteLinkInfo : public Jsonable {
+ public:
+  JsonChatInviteLinkInfo(const td_api::chatInviteLinkInfo *chat_invite_link_info, const Client *client)
+      : chat_invite_link_info_(chat_invite_link_info), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("chat_id", chat_invite_link_info_->chat_id_);
+    object("accessible_for", chat_invite_link_info_->accessible_for_);
+
+    auto chat_type = [&] {
+      switch (chat_invite_link_info_->type_->get_id()) {
+        case td_api::chatTypePrivate::ID:
+          return "private";
+        case td_api::chatTypeBasicGroup::ID:
+          return "group";
+        case td_api::chatTypeSupergroup::ID: {
+          auto type = static_cast<const td_api::chatTypeSupergroup *>(chat_invite_link_info_->type_.get());
+          if (type->is_channel_) {
+            return "channel";
+          } else {
+            return "supergroup";
+          }
+        }
+        case td_api::chatTypeSecret::ID:
+          return "";
+        default:
+          UNREACHABLE();
+          return "";
+      }
+    }();
+
+    object("type", chat_type);
+    object("title", chat_invite_link_info_->title_);
+    object("photo", JsonChatPhotoInfo(chat_invite_link_info_->photo_.get()));
+    object("member_count", chat_invite_link_info_->member_count_);
+    object("member_user_ids", td::json_array(chat_invite_link_info_->member_user_ids_,
+                                             [](int32 member_user_id) { return member_user_id; }));
+    object("members",
+           td::json_array(chat_invite_link_info_->member_user_ids_,
+                          [client = client_](int32 member_user_id) { return JsonUser(member_user_id, client); }));
+    object("is_public", td::JsonBool(chat_invite_link_info_->is_public_));
+  }
+
+ private:
+  const td_api::chatInviteLinkInfo *chat_invite_link_info_;
+  const Client *client_;
+};
 //end custom Json objects impl
 
 class Client::TdOnOkCallback : public TdQueryCallback {
@@ -2822,7 +2976,8 @@ class Client::TdOnAuthorizationQueryCallback : public TdQueryCallback {
         return client_->log_out(false);
       }
       if (send_token_) {
-        answer_query(JsonAuthorizationState(client_->authorization_state_.get(), client_->bot_token_), std::move(query_));
+        answer_query(JsonAuthorizationState(client_->authorization_state_.get(), client_->bot_token_),
+                     std::move(query_));
 
       } else {
         answer_query(JsonAuthorizationState(client_->authorization_state_.get()), std::move(query_));
@@ -3679,8 +3834,11 @@ class Client::TdOnGetChatInviteLinkCallback : public TdQueryCallback {
     } else {
       CHECK(result->get_id() == td_api::chatInviteLinks::ID);
       auto invite_links = move_object_as<td_api::chatInviteLinks>(result);
-      CHECK(!invite_links->invite_links_.empty());
-      return answer_query(JsonChatInviteLink(invite_links->invite_links_[0].get(), client_), std::move(query_));
+      // CHECK(!invite_links->invite_links_.empty());
+
+      return answer_query(JsonChatInviteLinks(invite_links.get(), client_), std::move(query_));
+
+      // return answer_query(JsonChatInviteLink(invite_links->invite_links_[0].get(), client_), std::move(query_));
     }
   }
 
@@ -3801,8 +3959,7 @@ class Client::TdOnPingCallback : public TdQueryCallback {
 
 class Client::TdOnGetMemoryStatisticsCallback : public TdQueryCallback {
  public:
-  explicit TdOnGetMemoryStatisticsCallback(PromisedQueryPtr query)
-      : query_(std::move(query)) {
+  explicit TdOnGetMemoryStatisticsCallback(PromisedQueryPtr query) : query_(std::move(query)) {
   }
 
   void on_result(object_ptr<td_api::Object> result) override {
@@ -3884,8 +4041,7 @@ class Client::TdOnJoinChatCallback : public TdQueryCallback {
 
 class Client::TdOnReturnChatCallback : public TdQueryCallback {
  public:
-  explicit TdOnReturnChatCallback(Client *client, PromisedQueryPtr query)
-      : client_(client), query_(std::move(query)) {
+  explicit TdOnReturnChatCallback(Client *client, PromisedQueryPtr query) : client_(client), query_(std::move(query)) {
   }
 
   void on_result(object_ptr<td_api::Object> result) override {
@@ -3926,8 +4082,7 @@ class Client::TdOnReturnMessagesCallback : public TdQueryCallback {
 
 class Client::TdOnGetCallbackQueryAnswerCallback : public TdQueryCallback {
  public:
-  explicit TdOnGetCallbackQueryAnswerCallback(PromisedQueryPtr query)
-      : query_(std::move(query)) {
+  explicit TdOnGetCallbackQueryAnswerCallback(PromisedQueryPtr query) : query_(std::move(query)) {
   }
 
   void on_result(object_ptr<td_api::Object> result) override {
@@ -3980,6 +4135,104 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
   }
 
  private:
+  PromisedQueryPtr query_;
+};
+
+// my custom callbacks
+
+template <class OnSuccess>
+class Client::TdOngetChatInviteLinkCountsCallbackOnSuccess : public TdQueryCallback {
+ public:
+  explicit TdOngetChatInviteLinkCountsCallbackOnSuccess(const Client *client, PromisedQueryPtr query,
+                                                        OnSuccess on_success)
+      : client_(client), query_(std::move(query)), on_success_(std::move(on_success)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::chatInviteLinkCounts::ID);
+    auto chat_invite_link_counts = move_object_as<td_api::chatInviteLinkCounts>(result);
+
+    on_success_(std::move(chat_invite_link_counts), std::move(query_));
+  }
+
+ private:
+  const Client *client_;
+  PromisedQueryPtr query_;
+  OnSuccess on_success_;
+};
+
+class Client::TdOnGetChatInviteLinkCountsCallback : public TdQueryCallback {
+ public:
+  explicit TdOnGetChatInviteLinkCountsCallback(const Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::chatInviteLinkCounts::ID);
+    auto chat_invite_link_counts = move_object_as<td_api::chatInviteLinkCounts>(result);
+
+    return answer_query(td::json_array(chat_invite_link_counts->invite_link_counts_,
+                                       [client = client_](auto &invite_link_count) {
+                                         return JsonChatInviteLinkCount(invite_link_count.get(), client);
+                                       }),
+                        std::move(query_));
+  }
+
+ private:
+  const Client *client_;
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetChatInviteLinkMembersCallback : public TdQueryCallback {
+ public:
+  explicit TdOnGetChatInviteLinkMembersCallback(const Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::chatInviteLinkMembers::ID);
+    auto chat_invite_link_members = move_object_as<td_api::chatInviteLinkMembers>(result);
+    return answer_query(JsonChatInviteLinkMembers(chat_invite_link_members.get(), client_), std::move(query_));
+  }
+
+ private:
+  const Client *client_;
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnCheckChatInviteLinkCallback : public TdQueryCallback {
+ public:
+  explicit TdOnCheckChatInviteLinkCallback(const Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::chatInviteLinkInfo::ID);
+    auto chat_invite_link_info = move_object_as<td_api::chatInviteLinkInfo>(result);
+    return answer_query(JsonChatInviteLinkInfo(chat_invite_link_info.get(), client_), std::move(query_));
+  }
+
+ private:
+  const Client *client_;
   PromisedQueryPtr query_;
 };
 
@@ -4065,7 +4318,6 @@ void Client::start_up() {
   auto context = std::make_shared<td::ActorContext>();
   set_context(context);
   set_tag(bot_token_id_);
-
 
   auto suff = bot_token_with_dc_ + TD_DIR_SLASH;
   if (!parameters_->allow_colon_in_filenames_) {
@@ -4414,7 +4666,7 @@ bool Client::have_message_access(int64 chat_id) const {
       auto supergroup_info = get_supergroup_info(chat_info->supergroup_id);
       CHECK(supergroup_info != nullptr);
       return !supergroup_info->is_supergroup || is_chat_member(supergroup_info->status);
-//      return is_chat_member(supergroup_info->status);
+      //      return is_chat_member(supergroup_info->status);
     }
     case ChatInfo::Type::Unknown:
     default:
@@ -4618,7 +4870,8 @@ void Client::on_update_file(object_ptr<td_api::file> file) {
   if (!is_file_being_downloaded(file_id)) {
     return;
   }
-  if ((!parameters_->local_mode_ || !parameters_->no_file_limit_) && file->local_->downloaded_size_ > MAX_DOWNLOAD_FILE_SIZE) {
+  if ((!parameters_->local_mode_ || !parameters_->no_file_limit_) &&
+      file->local_->downloaded_size_ > MAX_DOWNLOAD_FILE_SIZE) {
     if (file->local_->is_downloading_active_) {
       send_request(make_object<td_api::cancelDownloadFile>(file_id, false),
                    std::make_unique<TdOnCancelDownloadFileCallback>());
@@ -4684,9 +4937,9 @@ void Client::on_update_authorization_state() {
       send_request(make_object<td_api::setOption>("delete_user_reference_after_seconds",
                                                   make_object<td_api::optionValueInteger>(3600)),
                    std::make_unique<TdOnOkCallback>());
-      send_request(make_object<td_api::setOption>("delete_file_reference_after_seconds",
-                                                  make_object<td_api::optionValueInteger>(
-                                                          parameters_->file_expiration_timeout_seconds_)),
+      send_request(make_object<td_api::setOption>(
+                       "delete_file_reference_after_seconds",
+                       make_object<td_api::optionValueInteger>(parameters_->file_expiration_timeout_seconds_)),
                    std::make_unique<TdOnOkCallback>());
 
       auto parameters = make_object<td_api::tdlibParameters>();
@@ -4712,7 +4965,7 @@ void Client::on_update_authorization_state() {
       return send_request(make_object<td_api::checkDatabaseEncryptionKey>(), std::make_unique<TdOnInitCallback>(this));
     case td_api::authorizationStateWaitPhoneNumber::ID:
       send_request(make_object<td_api::setOption>("online", make_object<td_api::optionValueBoolean>(true)),
-                 std::make_unique<TdOnOkCallback>());
+                   std::make_unique<TdOnOkCallback>());
       if (is_user_) {
         waiting_for_auth_input_ = true;
         return loop();
@@ -5786,7 +6039,8 @@ td::Result<td_api::object_ptr<td_api::InputMessageContent>> Client::get_input_me
   return nullptr;
 }
 
-td_api::object_ptr<td_api::messageSendOptions> Client::get_message_send_options(bool disable_notification, td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state) {
+td_api::object_ptr<td_api::messageSendOptions> Client::get_message_send_options(
+    bool disable_notification, td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state) {
   return make_object<td_api::messageSendOptions>(disable_notification, false, std::move(scheduling_state));
 }
 
@@ -7532,10 +7786,11 @@ td::Status Client::process_send_media_group_query(PromisedQueryPtr &query) {
         auto on_success = [this, disable_notification, input_message_contents = std::move(input_message_contents),
                            reply_markup = std::move(reply_markup), send_at = std::move(send_at)](
                               int64 chat_id, int64 reply_to_message_id, PromisedQueryPtr query) mutable {
-          send_request(make_object<td_api::sendMessageAlbum>(chat_id, 0, reply_to_message_id,
-                                                             get_message_send_options(disable_notification, std::move(send_at)),
-                                                             std::move(input_message_contents)),
-                       std::make_unique<TdOnSendMessageAlbumCallback>(this, std::move(query)));
+          send_request(
+              make_object<td_api::sendMessageAlbum>(chat_id, 0, reply_to_message_id,
+                                                    get_message_send_options(disable_notification, std::move(send_at)),
+                                                    std::move(input_message_contents)),
+              std::make_unique<TdOnSendMessageAlbumCallback>(this, std::move(query)));
         };
         check_message(chat_id, reply_to_message_id, reply_to_message_id <= 0 || allow_sending_without_reply,
                       AccessRights::Write, "replied message", std::move(query), std::move(on_success));
@@ -8206,6 +8461,17 @@ void Client::optimize_memory(PromisedQueryPtr query, OnSuccess on_success) {
   */
 }
 
+// add my onsuccess
+
+template <class OnSuccess>
+void Client::get_chat_invite_link_counts(int64 chat_id, PromisedQueryPtr query, OnSuccess on_success) {
+  send_request(make_object<td_api::getChatInviteLinkCounts>(chat_id),
+               std::make_unique<TdOngetChatInviteLinkCountsCallbackOnSuccess<OnSuccess>>(this, std::move(query),
+                                                                                         std::move(on_success)));
+}
+
+// end to add
+
 td::Status Client::process_leave_chat_query(PromisedQueryPtr &query) {
   auto chat_id = query->arg("chat_id");
 
@@ -8641,45 +8907,44 @@ td::Status Client::process_get_chat_members_query(PromisedQueryPtr &query) {
       chat_id, AccessRights::Read, std::move(query), [this, offset, limit](int64 chat_id, PromisedQueryPtr query) {
         auto chat_info = get_chat(chat_id);
         CHECK(chat_info != nullptr);
-    switch (chat_info->type) {
-      case ChatInfo::Type::Private:
-        return fail_query(400, "Bad Request: there are no administrators in the private chat", std::move(query));
-      case ChatInfo::Type::Group: {
-        auto group_info = get_group_info(chat_info->group_id);
-        CHECK(group_info != nullptr);
-        return send_request(make_object<td_api::getBasicGroupFullInfo>(chat_info->group_id),
-                            std::make_unique<TdOnGetGroupMembersCallback>(this, false, std::move(query)));
-      }
-      case ChatInfo::Type::Supergroup: {
-        td_api::object_ptr<td_api::SupergroupMembersFilter> filter;
-        td::string filter_name = td::to_lower(query->arg("filter"));
-        auto query_ = query->arg("query");
-        if (!query_.empty()) {
-          filter = td_api::make_object<td_api::supergroupMembersFilterSearch>(query_.str());
-        } else if (filter_name == "members" || filter_name == "participants") {
-          filter = td_api::make_object<td_api::supergroupMembersFilterRecent>();
-        } else if (filter_name == "banned") {
-          filter = td_api::make_object<td_api::supergroupMembersFilterBanned>();
-        } else if (filter_name == "restricted") {
-          filter = td_api::make_object<td_api::supergroupMembersFilterRestricted>();
-        } else if (filter_name == "bots") {
-          filter = td_api::make_object<td_api::supergroupMembersFilterBots>();
-        } else if (filter_name == "admins" || filter_name == "administrators") {
-          filter = td_api::make_object<td_api::supergroupMembersFilterAdministrators>();
-        } else {
-          fail_query_with_error(std::move(query), 400, "Invalid member type");
-          return;
+        switch (chat_info->type) {
+          case ChatInfo::Type::Private:
+            return fail_query(400, "Bad Request: there are no administrators in the private chat", std::move(query));
+          case ChatInfo::Type::Group: {
+            auto group_info = get_group_info(chat_info->group_id);
+            CHECK(group_info != nullptr);
+            return send_request(make_object<td_api::getBasicGroupFullInfo>(chat_info->group_id),
+                                std::make_unique<TdOnGetGroupMembersCallback>(this, false, std::move(query)));
+          }
+          case ChatInfo::Type::Supergroup: {
+            td_api::object_ptr<td_api::SupergroupMembersFilter> filter;
+            td::string filter_name = td::to_lower(query->arg("filter"));
+            auto query_ = query->arg("query");
+            if (!query_.empty()) {
+              filter = td_api::make_object<td_api::supergroupMembersFilterSearch>(query_.str());
+            } else if (filter_name == "members" || filter_name == "participants") {
+              filter = td_api::make_object<td_api::supergroupMembersFilterRecent>();
+            } else if (filter_name == "banned") {
+              filter = td_api::make_object<td_api::supergroupMembersFilterBanned>();
+            } else if (filter_name == "restricted") {
+              filter = td_api::make_object<td_api::supergroupMembersFilterRestricted>();
+            } else if (filter_name == "bots") {
+              filter = td_api::make_object<td_api::supergroupMembersFilterBots>();
+            } else if (filter_name == "admins" || filter_name == "administrators") {
+              filter = td_api::make_object<td_api::supergroupMembersFilterAdministrators>();
+            } else {
+              fail_query_with_error(std::move(query), 400, "Invalid member type");
+              return;
+            }
+            return send_request(
+                make_object<td_api::getSupergroupMembers>(chat_info->supergroup_id, std::move(filter), offset, limit),
+                std::make_unique<TdOnGetSupergroupMembersCallback>(this, get_chat_type(chat_id), std::move(query)));
+          }
+          case ChatInfo::Type::Unknown:
+          default:
+            UNREACHABLE();
         }
-        return send_request(
-            make_object<td_api::getSupergroupMembers>(
-                chat_info->supergroup_id, std::move(filter), offset, limit),
-            std::make_unique<TdOnGetSupergroupMembersCallback>(this, get_chat_type(chat_id), std::move(query)));
-      }
-      case ChatInfo::Type::Unknown:
-      default:
-        UNREACHABLE();
-    }
-  });
+      });
   return Status::OK();
 }
 
@@ -8701,8 +8966,9 @@ td::Status Client::process_delete_messages_query(PromisedQueryPtr &query) {
     return Status::Error(400, "Initial message identifier is not lower than last message identifier");
   }
 
-  if (static_cast<td::uint32>(end-start) > parameters_->max_batch_operations) {
-    return Status::Error(400, PSLICE() << "Too many operations: maximum number of batch operation is " << parameters_->max_batch_operations);
+  if (static_cast<td::uint32>(end - start) > parameters_->max_batch_operations) {
+    return Status::Error(400, PSLICE() << "Too many operations: maximum number of batch operation is "
+                                       << parameters_->max_batch_operations);
   }
 
   check_chat(chat_id, AccessRights::Write, std::move(query), [this, start, end](int64 chat_id, PromisedQueryPtr query) {
@@ -8711,7 +8977,7 @@ td::Status Client::process_delete_messages_query(PromisedQueryPtr &query) {
     }
 
     td::vector<td::int64> ids;
-    ids.reserve(end-start+1);
+    ids.reserve(end - start + 1);
     for (td::int32 i = start; i <= end; i++) {
       ids.push_back(as_tdlib_message_id(i));
     }
@@ -8744,8 +9010,7 @@ td::Status Client::process_get_memory_stats_query(PromisedQueryPtr &query) {
 }
 
 td::Status Client::process_get_proxies_query(PromisedQueryPtr &query) {
-  send_request(make_object<td_api::getProxies>(),
-               std::make_unique<TdOnGetProxiesQueryCallback>(std::move(query)));
+  send_request(make_object<td_api::getProxies>(), std::make_unique<TdOnGetProxiesQueryCallback>(std::move(query)));
   return Status::OK();
 }
 
@@ -8803,8 +9068,7 @@ td::Status Client::process_enable_proxy_query(PromisedQueryPtr &query) {
 }
 
 td::Status Client::process_disable_proxy_query(PromisedQueryPtr &query) {
-  send_request(make_object<td_api::disableProxy>(),
-               std::make_unique<TdOnOkQueryCallback>(std::move(query)));
+  send_request(make_object<td_api::disableProxy>(), std::make_unique<TdOnOkQueryCallback>(std::move(query)));
   return Status::OK();
 }
 //end custom methods impl
@@ -8918,8 +9182,10 @@ td::Status Client::process_report_chat_query(PromisedQueryPtr &query) {
   check_chat(chat_id, AccessRights::Read, std::move(query),
              [this, reason = std::move(reason), message_ids = std::move(message_ids)](int64 chat_id,
                                                                                       PromisedQueryPtr query) mutable {
-
-               send_request(make_object<td_api::reportChat>(chat_id, std::move(message_ids), std::move(reason), reason->get_id() == td_api::chatReportReasonCustom::ID ? query->arg("reason").str() : td::string()),
+               send_request(make_object<td_api::reportChat>(chat_id, std::move(message_ids), std::move(reason),
+                                                            reason->get_id() == td_api::chatReportReasonCustom::ID
+                                                                ? query->arg("reason").str()
+                                                                : td::string()),
                             std::make_unique<TdOnOkQueryCallback>(std::move(query)));
              });
   return Status::OK();
@@ -9037,6 +9303,126 @@ td::Status Client::process_edit_message_scheduling_query(PromisedQueryPtr &query
 }
 
 //end custom user methods impl
+
+// start my custom methods
+
+td::Status Client::process_get_chat_invite_link(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  auto invite_link = query->arg("invite_link");
+
+  check_chat(chat_id, AccessRights::Write, std::move(query),
+             [this, invite_link = invite_link.str()](int64 chat_id, PromisedQueryPtr query) {
+               send_request(make_object<td_api::getChatInviteLink>(chat_id, invite_link),
+                            std::make_unique<TdOnGetChatInviteLinkCallback>(this, std::move(query)));
+             });
+  return Status::OK();
+}
+
+td::Status Client::process_get_chat_invite_links(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  TRY_RESULT(creator_user_id, get_user_id(query.get(), "creator_user_id"));
+  auto is_revoked = to_bool(query->arg("is_revoked"));
+  auto offset_date = get_integer_arg(query.get(), "offset_date", 0, 0);
+  auto offset_invite_link = query->arg("offset_invite_link");
+  auto limit = get_integer_arg(query.get(), "limit", 0, 0);
+
+  check_chat(chat_id, AccessRights::Write, std::move(query),
+             [this, creator_user_id, is_revoked, offset_date, offset_invite_link = offset_invite_link.str(), limit](
+                 int64 chat_id, PromisedQueryPtr query) {
+               send_request(make_object<td_api::getChatInviteLinks>(chat_id, creator_user_id, is_revoked, offset_date,
+                                                                    offset_invite_link, limit),
+                            std::make_unique<TdOnGetChatInviteLinkCallback>(this, std::move(query)));
+             });
+  return Status::OK();
+}
+
+td::Status Client::process_get_chat_invite_link_counts(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+
+  check_chat(chat_id, AccessRights::Write, std::move(query), [this](int64 chat_id, PromisedQueryPtr query) {
+    send_request(make_object<td_api::getChatInviteLinkCounts>(chat_id),
+                 std::make_unique<TdOnGetChatInviteLinkCountsCallback>(this, std::move(query)));
+  });
+  return Status::OK();
+}
+
+td::Result<td_api::object_ptr<td_api::chatInviteLinkMember>> Client::get_chat_invite_link_member(const Query *query,
+                                                                                                 Slice field_name) {
+  if (query->has_arg(field_name)) {
+    auto r_value = json_decode(query->arg(field_name));
+    if (r_value.is_error()) {
+      LOG(INFO) << "Can't parse JSON object: " << r_value.error();
+      return Status::Error(400, "Can't parse offset_member JSON object");
+    }
+
+    auto value = r_value.move_as_ok();
+    if (value.type() != JsonValue::Type::Object) {
+      return Status::Error(400, "Object expected as permissions");
+    }
+    auto &object = value.get_object();
+
+    TRY_RESULT(user_id, get_json_object_int_field(object, "user_id"));
+    TRY_RESULT(joined_chat_date, get_json_object_int_field(object, "joined_chat_date"));
+
+    return make_object<td_api::chatInviteLinkMember>(user_id, joined_chat_date);
+  }
+
+  return nullptr;
+}
+
+td::Status Client::process_get_chat_invite_link_members(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  auto invite_link = query->arg("invite_link");
+  // TRY_RESULT(offset_member, get_chat_invite_link_member(query.get()));
+  auto limit = get_integer_arg(query.get(), "limit", 0, 0);
+
+  check_chat(
+      chat_id, AccessRights::Write, std::move(query),
+      [this, invite_link = invite_link.str(), offset_member = nullptr, limit](int64 chat_id, PromisedQueryPtr query) {
+        send_request(make_object<td_api::getChatInviteLinkMembers>(chat_id, invite_link, offset_member, limit),
+                     std::make_unique<TdOnGetChatInviteLinkMembersCallback>(this, std::move(query)));
+      });
+  return Status::OK();
+}
+
+td::Status Client::process_get_chat_invite_links_full_data(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+
+  check_chat(chat_id, AccessRights::Write, std::move(query), [this](int64 chat_id, PromisedQueryPtr query) {
+    get_chat_invite_link_counts(
+        chat_id, std::move(query),
+        [this, chat_id](object_ptr<td_api::chatInviteLinkCounts> count_data, PromisedQueryPtr query) {
+          auto user_id = count_data->invite_link_counts_[0].get()->user_id_;
+
+          send_request(make_object<td_api::getChatInviteLinks>(chat_id, user_id, false, 0, "", 100),
+                       std::make_unique<TdOnGetChatInviteLinkCallback>(this, std::move(query)));
+        });
+  });
+  return Status::OK();
+}
+
+td::Status Client::process_check_chat_invite_link(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto invite_link = query->arg("invite_link").str();
+
+  send_request(make_object<td_api::checkChatInviteLink>(invite_link),
+               std::make_unique<TdOnCheckChatInviteLinkCallback>(this, std::move(query)));
+  return Status::OK();
+}
+
+// end my cuttom methods
+
 //start custom auth methods impl
 
 void Client::process_auth_phone_number_query(PromisedQueryPtr &query) {
@@ -9331,10 +9717,11 @@ void Client::do_send_message(object_ptr<td_api::InputMessageContent> input_messa
         auto on_success = [this, disable_notification, input_message_content = std::move(input_message_content),
                            reply_markup = std::move(reply_markup), send_at = std::move(send_at)](
                               int64 chat_id, int64 reply_to_message_id, PromisedQueryPtr query) mutable {
-          send_request(make_object<td_api::sendMessage>(chat_id, 0, reply_to_message_id,
-                                                        get_message_send_options(disable_notification, std::move(send_at)),
-                                                        std::move(reply_markup), std::move(input_message_content)),
-                       std::make_unique<TdOnSendMessageCallback>(this, std::move(query)));
+          send_request(
+              make_object<td_api::sendMessage>(chat_id, 0, reply_to_message_id,
+                                               get_message_send_options(disable_notification, std::move(send_at)),
+                                               std::move(reply_markup), std::move(input_message_content)),
+              std::make_unique<TdOnSendMessageCallback>(this, std::move(query)));
         };
         check_message(chat_id, reply_to_message_id, reply_to_message_id <= 0 || allow_sending_without_reply,
                       AccessRights::Write, "replied message", std::move(query), std::move(on_success));
@@ -9760,7 +10147,8 @@ void Client::json_store_file(td::JsonObjectScope &object, const td_api::file *fi
       }
     } else {
       Slice relative_path = td::PathView::relative(file->local_->path_, dir_, true);
-      if (!relative_path.empty() && (parameters_->local_mode_ || parameters_->no_file_limit_ || file->local_->downloaded_size_ <= MAX_DOWNLOAD_FILE_SIZE)) {
+      if (!relative_path.empty() && (parameters_->local_mode_ || parameters_->no_file_limit_ ||
+                                     file->local_->downloaded_size_ <= MAX_DOWNLOAD_FILE_SIZE)) {
         object("file_path", relative_path);
       }
     }
@@ -10191,7 +10579,7 @@ bool Client::need_skip_update_message(int64 chat_id, const object_ptr<td_api::me
     }
   }
 
-/*
+  /*
   if (message->ttl_ > 0 && message->ttl_expires_in_ == 0) {
     return true;
   }
@@ -10724,8 +11112,9 @@ Client::FullMessageId Client::add_message(object_ptr<td_api::message> &&message,
     message_info->views = message->interaction_info_->view_count_;
     message_info->forwards = message->interaction_info_->forward_count_;
   }
-  message_info->is_scheduled = message->scheduling_state_!=nullptr;
-  if (message->scheduling_state_!=nullptr && message->scheduling_state_->get_id() == td_api::messageSchedulingStateSendAtDate::ID) {
+  message_info->is_scheduled = message->scheduling_state_ != nullptr;
+  if (message->scheduling_state_ != nullptr &&
+      message->scheduling_state_->get_id() == td_api::messageSchedulingStateSendAtDate::ID) {
     auto scheduling_state = move_object_as<td_api::messageSchedulingStateSendAtDate>(message->scheduling_state_);
     message_info->scheduled_at = scheduling_state->send_date_;
   }
