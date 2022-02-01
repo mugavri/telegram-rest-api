@@ -642,15 +642,16 @@ class Client::JsonChatInviteLink : public Jsonable {
       object("name", chat_invite_link_->name_);
     }
     object("creator", JsonUser(chat_invite_link_->creator_user_id_, client_));
-    if (chat_invite_link_->expire_date_ != 0) {
-      object("expire_date", chat_invite_link_->expire_date_);
-    }
-    if (chat_invite_link_->member_limit_ != 0) {
-      object("member_limit", chat_invite_link_->member_limit_);
-    }
-    if (chat_invite_link_->pending_join_request_count_ != 0) {
-      object("pending_join_request_count", chat_invite_link_->pending_join_request_count_);
-    }
+
+    object("date", chat_invite_link_->date_);
+    object("expire_date", chat_invite_link_->expire_date_);
+    object("edit_date", chat_invite_link_->edit_date_);
+
+    object("member_limit", chat_invite_link_->member_limit_);
+    object("member_count", chat_invite_link_->member_count_);
+
+    object("pending_join_request_count", chat_invite_link_->pending_join_request_count_);
+
     object("creates_join_request", td::JsonBool(chat_invite_link_->creates_join_request_));
     object("is_primary", td::JsonBool(chat_invite_link_->is_primary_));
     object("is_revoked", td::JsonBool(chat_invite_link_->is_revoked_));
