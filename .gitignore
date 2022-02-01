@@ -5,3 +5,5 @@ bin/
 vcpkg/
 /.idea/
 .cache/*
+.vscode/*
+data/
