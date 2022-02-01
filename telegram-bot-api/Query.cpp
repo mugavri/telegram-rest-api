@@ -48,6 +48,7 @@ Query::Query(td::vector<td::BufferSlice> &&container, td::Slice token, bool is_u
   if (shared_data_) {
     shared_data_->query_count_++;
     if (method_ != "getupdates") {
+      shared_data_->query_list_size_++;
       shared_data_->query_list_.put(this);
     }
   }
@@ -126,7 +127,7 @@ void Query::send_request_stat() const {
 
 void Query::send_response_stat() const {
   auto now = td::Time::now();
-  if (now - start_timestamp_ >= 100.0) {
+  if (now - start_timestamp_ >= 100.0 && !is_internal_) {
     LOG(WARNING) << "Answer too old query with code " << http_status_code_ << " and answer size " << answer_.size()
                  << ": " << *this;
   }
