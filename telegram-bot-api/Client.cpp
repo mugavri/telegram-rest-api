@@ -1712,7 +1712,7 @@ class Client::JsonReplyMarkup final : public Jsonable {
   const td_api::ReplyMarkup *reply_markup_;
 };
 
-class Client::JsonMeesageReplyInfo : public Jsonable {
+class Client::JsonMeesageReplyInfo final : public Jsonable {
  public:
   JsonMeesageReplyInfo(const td_api::messageReplyInfo *message_reply_info, const Client *client)
       : message_reply_info_(message_reply_info), client_(client) {
@@ -1732,7 +1732,7 @@ class Client::JsonMeesageReplyInfo : public Jsonable {
 };
 
 
-class Client::JsonMessageReaction : public Jsonable {
+class Client::JsonMessageReaction final : public Jsonable {
  public:
   JsonMessageReaction(const td_api::messageReaction *message_reaction, const Client *client)
       : message_reaction_(message_reaction), client_(client) {
@@ -2725,7 +2725,7 @@ class Client::JsonStickerSet final : public Jsonable {
 
 // start custom Json objects impl
 
-class Client::JsonAuthorizationState : public Jsonable {
+class Client::JsonAuthorizationState final : public Jsonable {
  public:
   JsonAuthorizationState(const td_api::AuthorizationState *state, td::string token = "")
       : state_(state), token_(token) {
@@ -2778,7 +2778,7 @@ class Client::JsonAuthorizationState : public Jsonable {
   const td::string token_;
 };
 
-class Client::JsonCallbackQueryAnswer : public Jsonable {
+class Client::JsonCallbackQueryAnswer final : public Jsonable {
  public:
   JsonCallbackQueryAnswer(const td_api::callbackQueryAnswer *answer) : answer_(answer) {
   }
@@ -2794,7 +2794,7 @@ class Client::JsonCallbackQueryAnswer : public Jsonable {
   const td_api::callbackQueryAnswer *answer_;
 };
 
-class Client::JsonChats : public Jsonable {
+class Client::JsonChats final : public Jsonable {
  public:
   JsonChats(const object_ptr<td_api::chats> &chats, const Client *client) : chats_(chats), client_(client) {
   }
@@ -2810,7 +2810,7 @@ class Client::JsonChats : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonChatsNearby : public Jsonable {
+class Client::JsonChatsNearby final : public Jsonable {
  public:
   JsonChatsNearby(const object_ptr<td_api::chatsNearby> &chats_nearby, const Client *client)
       : chats_nearby_(chats_nearby), client_(client) {
@@ -2830,7 +2830,7 @@ class Client::JsonChatsNearby : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonMessagesArray : public Jsonable {
+class Client::JsonMessagesArray final : public Jsonable {
  public:
   explicit JsonMessagesArray(object_ptr<td_api::messages> &messages, Client *client)
       : messages_(messages), client_(client) {
@@ -2849,7 +2849,7 @@ class Client::JsonMessagesArray : public Jsonable {
   Client *client_;
 };
 
-class Client::JsonProxy : public Jsonable {
+class Client::JsonProxy final: public Jsonable {
  public:
   explicit JsonProxy(object_ptr<td_api::proxy> &proxy) : proxy_(proxy) {
   }
@@ -2887,7 +2887,7 @@ class Client::JsonProxy : public Jsonable {
   object_ptr<td_api::proxy> &proxy_;
 };
 
-class Client::JsonProxiesArray : public Jsonable {
+class Client::JsonProxiesArray final : public Jsonable {
  public:
   explicit JsonProxiesArray(object_ptr<td_api::proxies> &proxies) : proxies_(proxies) {
   }
@@ -2904,7 +2904,7 @@ class Client::JsonProxiesArray : public Jsonable {
 
 // start my custom objects
 
-class Client::JsonChatInviteLinks : public Jsonable {
+class Client::JsonChatInviteLinks final : public Jsonable {
  public:
   JsonChatInviteLinks(const td_api::chatInviteLinks *chat_invite_links, const Client *client)
       : chat_invite_links_(chat_invite_links), client_(client) {
@@ -2922,7 +2922,7 @@ class Client::JsonChatInviteLinks : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonChatInviteLinkCount : public Jsonable {
+class Client::JsonChatInviteLinkCount final : public Jsonable {
  public:
   JsonChatInviteLinkCount(const td_api::chatInviteLinkCount *chat_invite_link_count, const Client *client)
       : chat_invite_link_count_(chat_invite_link_count), client_(client) {
@@ -2940,7 +2940,7 @@ class Client::JsonChatInviteLinkCount : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonChatInviteLinkMember : public Jsonable {
+class Client::JsonChatInviteLinkMember final : public Jsonable {
  public:
   JsonChatInviteLinkMember(const td_api::chatInviteLinkMember *chat_invite_link_member, const Client *client)
       : chat_invite_link_member_(chat_invite_link_member), client_(client) {
@@ -2957,7 +2957,7 @@ class Client::JsonChatInviteLinkMember : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonChatInviteLinkMembers : public Jsonable {
+class Client::JsonChatInviteLinkMembers final : public Jsonable {
  public:
   JsonChatInviteLinkMembers(const td_api::chatInviteLinkMembers *chat_invite_link_members, const Client *client)
       : chat_invite_link_members_(chat_invite_link_members), client_(client) {
@@ -3004,7 +3004,7 @@ class Client::JsonChatInviteLinkMembers : public Jsonable {
 // const td_api::ChatType *chat_type_;
 // };
 
-class Client::JsonChatInviteLinkInfo : public Jsonable {
+class Client::JsonChatInviteLinkInfo final : public Jsonable {
  public:
   JsonChatInviteLinkInfo(const td_api::chatInviteLinkInfo *chat_invite_link_info, const Client *client)
       : chat_invite_link_info_(chat_invite_link_info), client_(client) {
@@ -3055,7 +3055,7 @@ class Client::JsonChatInviteLinkInfo : public Jsonable {
 
 
 
-class Client::JsonAddedReaction : public Jsonable {
+class Client::JsonAddedReaction final : public Jsonable {
  public:
   JsonAddedReaction(const td_api::addedReaction *added_reaction, const Client *client)
       : added_reaction_(added_reaction), client_(client) {
@@ -3071,7 +3071,7 @@ class Client::JsonAddedReaction : public Jsonable {
   const Client *client_;
 };
 
-class Client::JsonAddedReactions : public Jsonable {
+class Client::JsonAddedReactions final : public Jsonable {
  public:
   JsonAddedReactions(const td_api::addedReactions *added_reactions, const Client *client)
       : added_reactions_(added_reactions), client_(client) {
