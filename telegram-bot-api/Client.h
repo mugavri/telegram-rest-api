@@ -178,6 +178,13 @@ class Client final : public WebhookActor::Callback {
   class JsonChatInviteLinkMembers;
   class JsonChatInviteLinkInfo;
 
+  class JsonMessageInteractionInfo;
+  class JsonMeesageReplyInfo;
+  class JsonMessageReaction;
+
+  class JsonAddedReactions;
+  class JsonAddedReaction;
+  
   //stop custom Json objects
 
   class TdOnOkCallback;
@@ -232,6 +239,7 @@ class Client final : public WebhookActor::Callback {
   class TdOnGetChatInviteLinkCountsCallback;
   class TdOnGetChatInviteLinkMembersCallback;
   class TdOnCheckChatInviteLinkCallback;
+  class TdOnGetMessageAddedReactionsCallback;
 
   //end custom callbacks
 
@@ -649,8 +657,9 @@ class Client final : public WebhookActor::Callback {
   Status process_get_chat_invite_link_counts(PromisedQueryPtr &query);
   Status process_get_chat_invite_link_members(PromisedQueryPtr &query);
   Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
-
   Status process_check_chat_invite_link(PromisedQueryPtr &query);
+
+  Status process_get_message_added_reactions(PromisedQueryPtr &query);
 
   void webhook_verified(td::string cached_ip_address) final;
   void webhook_success() final;
@@ -825,6 +834,8 @@ class Client final : public WebhookActor::Callback {
 
     bool is_scheduled = false;
     int32 scheduled_at = 0;
+
+    object_ptr<td_api::messageInteractionInfo> interaction_info;
     // end custom properties
 
     bool can_be_saved = false;

@@ -331,10 +331,11 @@ bool Client::init_methods() {
   methods_.emplace("getchatinvitelinks", &Client::process_get_chat_invite_links);
   methods_.emplace("getchatinvitelinkcounts", &Client::process_get_chat_invite_link_counts);
   methods_.emplace("getchatinvitelinkmembers", &Client::process_get_chat_invite_link_members);
-
   methods_.emplace("getchatinvitelinksfulldata", &Client::process_get_chat_invite_links_full_data);
 
   methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link);
+
+  methods_.emplace("getmessageaddedreactions", &Client::process_get_message_added_reactions);
 
   return true;
 }
@@ -643,7 +644,7 @@ class Client::JsonChatInviteLink final : public Jsonable {
     object("creator", JsonUser(chat_invite_link_->creator_user_id_, client_));
 
     object("date", chat_invite_link_->date_);
-    object("expire_date", chat_invite_link_->expire_date_);
+    object("expiration_date", chat_invite_link_->expiration_date_);
     object("edit_date", chat_invite_link_->edit_date_);
 
     object("member_limit", chat_invite_link_->member_limit_);
@@ -1711,6 +1712,69 @@ class Client::JsonReplyMarkup final : public Jsonable {
   const td_api::ReplyMarkup *reply_markup_;
 };
 
+class Client::JsonMeesageReplyInfo : public Jsonable {
+ public:
+  JsonMeesageReplyInfo(const td_api::messageReplyInfo *message_reply_info, const Client *client)
+      : message_reply_info_(message_reply_info), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("reply_count", message_reply_info_->reply_count_);
+    object("recent_repliers", td::json_array(message_reply_info_->recent_replier_ids_, [client = client_](auto &recent_replier_id) { return JsonMessageSender(recent_replier_id.get(), client); }));
+    object("last_read_inbox_message_id", message_reply_info_->last_read_inbox_message_id_);
+    object("last_read_outbox_message_id", message_reply_info_->last_read_outbox_message_id_);
+    object("last_message_id", message_reply_info_->last_message_id_);
+  }
+
+ private:
+  const td_api::messageReplyInfo *message_reply_info_;
+  const Client *client_;
+};
+
+
+class Client::JsonMessageReaction : public Jsonable {
+ public:
+  JsonMessageReaction(const td_api::messageReaction *message_reaction, const Client *client)
+      : message_reaction_(message_reaction), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("reaction", message_reaction_->reaction_);
+    object("total_count", message_reaction_->total_count_);
+    object("is_chosen", td::JsonBool(message_reaction_->is_chosen_));
+    object("recent_senders", td::json_array(message_reaction_->recent_sender_ids_, [client = client_](auto & recent_sender_id) { return JsonMessageSender(recent_sender_id.get(), client); }));
+  }
+
+ private:
+  const td_api::messageReaction *message_reaction_;
+  const Client *client_;
+};
+
+
+class Client::JsonMessageInteractionInfo final : public Jsonable {
+ public:
+  JsonMessageInteractionInfo(const td_api::messageInteractionInfo *message_interaction_info, const Client *client)
+      : message_interaction_info_(message_interaction_info), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("view_count", message_interaction_info_->view_count_);
+    object("forward_count", message_interaction_info_->forward_count_);
+
+    if (message_interaction_info_->reply_info_ != nullptr) {
+      object("reply_info", JsonMeesageReplyInfo(message_interaction_info_->reply_info_.get(), client_));
+    }
+
+    object("reactions", td::json_array(message_interaction_info_->reactions_,
+        [client = client_](auto &reaction) { return JsonMessageReaction(reaction.get(), client); }));
+    
+  }
+
+ private:
+  const td_api::messageInteractionInfo *message_interaction_info_;
+  const Client *client_;
+};
+
 void Client::JsonMessage::store(JsonValueScope *scope) const {
   CHECK(message_ != nullptr);
   auto object = scope->enter_object();
@@ -1739,6 +1803,11 @@ void Client::JsonMessage::store(JsonValueScope *scope) const {
   if (message_->forwards != 0) {
     object("forwards", message_->forwards);
   }
+
+  if (message_->interaction_info != nullptr) {
+    object("interaction_info", JsonMessageInteractionInfo(message_->interaction_info.get(), client_));
+  }
+
   if (message_->is_scheduled) {
     object("is_scheduled", td::JsonBool(message_->is_scheduled));
   }
@@ -2983,9 +3052,46 @@ class Client::JsonChatInviteLinkInfo : public Jsonable {
   const td_api::chatInviteLinkInfo *chat_invite_link_info_;
   const Client *client_;
 };
+
+
+
+class Client::JsonAddedReaction : public Jsonable {
+ public:
+  JsonAddedReaction(const td_api::addedReaction *added_reaction, const Client *client)
+      : added_reaction_(added_reaction), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("reaction", added_reaction_->reaction_);
+    object("sender", JsonMessageSender(added_reaction_->sender_id_.get(), client_));
+  }
+
+ private:
+  const td_api::addedReaction *added_reaction_;
+  const Client *client_;
+};
+
+class Client::JsonAddedReactions : public Jsonable {
+ public:
+  JsonAddedReactions(const td_api::addedReactions *added_reactions, const Client *client)
+      : added_reactions_(added_reactions), client_(client) {
+  }
+  void store(JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("total_count", added_reactions_->total_count_);
+    object("members", td::json_array(added_reactions_->reactions_, [client = client_](auto &reaction) {
+             return JsonAddedReaction(reaction.get(), client);
+           }));
+    object("next_offset", added_reactions_->next_offset_);
+  }
+
+ private:
+  const td_api::addedReactions *added_reactions_;
+  const Client *client_;
+};
+
 //end custom Json objects impl
 
-class Client::TdOnOkCallback : public TdQueryCallback {
 class Client::TdOnOkCallback final : public TdQueryCallback {
  public:
   void on_result(object_ptr<td_api::Object> result) final {
@@ -3071,7 +3177,6 @@ class Client::TdOnAuthorizationQueryCallback : public TdQueryCallback {
   bool send_token_;
 };
 
-class Client::TdOnInitCallback : public TdQueryCallback {
 class Client::TdOnInitCallback final : public TdQueryCallback {
  public:
   explicit TdOnInitCallback(Client *client) : client_(client) {
@@ -3396,7 +3501,6 @@ class Client::TdOnOptimizeMemoryCallback : public TdQueryCallback {
 };
 
 template <class OnSuccess>
-class Client::TdOnCheckChatNoFailCallback : public TdQueryCallback {
 class Client::TdOnCheckChatNoFailCallback final : public TdQueryCallback {
  public:
   TdOnCheckChatNoFailCallback(int64 chat_id, PromisedQueryPtr query, OnSuccess on_success)
@@ -4328,6 +4432,28 @@ class Client::TdOnCheckChatInviteLinkCallback : public TdQueryCallback {
     CHECK(result->get_id() == td_api::chatInviteLinkInfo::ID);
     auto chat_invite_link_info = move_object_as<td_api::chatInviteLinkInfo>(result);
     return answer_query(JsonChatInviteLinkInfo(chat_invite_link_info.get(), client_), std::move(query_));
+  }
+
+ private:
+  const Client *client_;
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetMessageAddedReactionsCallback : public TdQueryCallback {
+ public:
+  explicit TdOnGetMessageAddedReactionsCallback(const Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::addedReactions::ID);
+    auto added_reactions = move_object_as<td_api::addedReactions>(result);
+    return answer_query(JsonAddedReactions(added_reactions.get(), client_), std::move(query_));
   }
 
  private:
@@ -9669,6 +9795,23 @@ td::Status Client::process_check_chat_invite_link(PromisedQueryPtr &query) {
   return Status::OK();
 }
 
+td::Status Client::process_get_message_added_reactions(PromisedQueryPtr &query) {
+
+  auto chat_id = query->arg("chat_id");
+  auto message_id = get_message_id(query.get(), "message_id");
+  auto reaction = query->arg("reaction");
+  auto offset = query->arg("offset");
+  auto limit = get_integer_arg(query.get(), "limit", 0, 0);
+
+  check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
+              [this, reaction = reaction.str(), offset = offset.str(), limit](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+              send_request(make_object<td_api::getMessageAddedReactions>(chat_id, message_id, reaction, offset, limit),
+                          std::make_unique<TdOnGetMessageAddedReactionsCallback>(this, std::move(query)));
+              });
+
+  return Status::OK();
+}
+
 // end my cuttom methods
 
 //start custom auth methods impl
@@ -11276,6 +11419,8 @@ Client::FullMessageId Client::add_message(object_ptr<td_api::message> &&message,
   message_info->initial_message_id = 0;
   message_info->initial_author_signature = td::string();
   message_info->initial_sender_name = td::string();
+  // message_info->interaction_info = nullptr;
+  
   if (message->forward_info_ != nullptr) {
     message_info->initial_send_date = message->forward_info_->date_;
     auto origin = std::move(message->forward_info_->origin_);
@@ -11349,6 +11494,8 @@ Client::FullMessageId Client::add_message(object_ptr<td_api::message> &&message,
   if (message->interaction_info_ != nullptr) {
     message_info->views = message->interaction_info_->view_count_;
     message_info->forwards = message->interaction_info_->forward_count_;
+
+    message_info->interaction_info = std::move(message->interaction_info_);
   }
   message_info->is_scheduled = message->scheduling_state_ != nullptr;
   if (message->scheduling_state_ != nullptr &&
