@@ -179,12 +179,12 @@ class Client final : public WebhookActor::Callback {
   class JsonChatInviteLinkInfo;
 
   class JsonMessageInteractionInfo;
-  class JsonMeesageReplyInfo;
+  class JsonMessageReplyInfo;
   class JsonMessageReaction;
 
   class JsonAddedReactions;
   class JsonAddedReaction;
-  
+
   //stop custom Json objects
 
   class TdOnOkCallback;
@@ -234,7 +234,7 @@ class Client final : public WebhookActor::Callback {
 
   // my custom callbacks
   template <class OnSuccess>
-  class TdOngetChatInviteLinkCountsCallbackOnSuccess;
+  class TdOnGetChatInviteLinkCountsCallbackOnSuccess;
 
   class TdOnGetChatInviteLinkCountsCallback;
   class TdOnGetChatInviteLinkMembersCallback;

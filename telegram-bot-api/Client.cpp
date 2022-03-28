@@ -1712,9 +1712,9 @@ class Client::JsonReplyMarkup final : public Jsonable {
   const td_api::ReplyMarkup *reply_markup_;
 };
 
-class Client::JsonMeesageReplyInfo final : public Jsonable {
+class Client::JsonMessageReplyInfo final : public Jsonable {
  public:
-  JsonMeesageReplyInfo(const td_api::messageReplyInfo *message_reply_info, const Client *client)
+  JsonMessageReplyInfo(const td_api::messageReplyInfo *message_reply_info, const Client *client)
       : message_reply_info_(message_reply_info), client_(client) {
   }
   void store(JsonValueScope *scope) const {
@@ -1762,7 +1762,7 @@ class Client::JsonMessageInteractionInfo final : public Jsonable {
     object("forward_count", message_interaction_info_->forward_count_);
 
     if (message_interaction_info_->reply_info_ != nullptr) {
-      object("reply_info", JsonMeesageReplyInfo(message_interaction_info_->reply_info_.get(), client_));
+      object("reply_info", JsonMessageReplyInfo(message_interaction_info_->reply_info_.get(), client_));
     }
 
     object("reactions", td::json_array(message_interaction_info_->reactions_,
@@ -4344,9 +4344,9 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
 // my custom callbacks
 
 template <class OnSuccess>
-class Client::TdOngetChatInviteLinkCountsCallbackOnSuccess : public TdQueryCallback {
+class Client::TdOnGetChatInviteLinkCountsCallbackOnSuccess : public TdQueryCallback {
  public:
-  explicit TdOngetChatInviteLinkCountsCallbackOnSuccess(const Client *client, PromisedQueryPtr query,
+  explicit TdOnGetChatInviteLinkCountsCallbackOnSuccess(const Client *client, PromisedQueryPtr query,
                                                         OnSuccess on_success)
       : client_(client), query_(std::move(query)), on_success_(std::move(on_success)) {
   }
@@ -8772,7 +8772,7 @@ void Client::optimize_memory(PromisedQueryPtr query, OnSuccess on_success) {
 template <class OnSuccess>
 void Client::get_chat_invite_link_counts(int64 chat_id, PromisedQueryPtr query, OnSuccess on_success) {
   send_request(make_object<td_api::getChatInviteLinkCounts>(chat_id),
-               std::make_unique<TdOngetChatInviteLinkCountsCallbackOnSuccess<OnSuccess>>(this, std::move(query),
+               std::make_unique<TdOnGetChatInviteLinkCountsCallbackOnSuccess<OnSuccess>>(this, std::move(query),
                                                                                          std::move(on_success)));
 }
 
