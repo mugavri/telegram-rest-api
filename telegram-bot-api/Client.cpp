@@ -32,8 +32,8 @@
 #include "td/utils/Time.h"
 #include "td/utils/utf8.h"
 
-#include <cstdlib>
 #include <climits>
+#include <cstdlib>
 
 #define CHECK_IS_BOT()                                                     \
   if (is_user_) {                                                          \
@@ -1720,7 +1720,10 @@ class Client::JsonMessageReplyInfo final : public Jsonable {
   void store(JsonValueScope *scope) const {
     auto object = scope->enter_object();
     object("reply_count", message_reply_info_->reply_count_);
-    object("recent_repliers", td::json_array(message_reply_info_->recent_replier_ids_, [client = client_](auto &recent_replier_id) { return JsonMessageSender(recent_replier_id.get(), client); }));
+    object("recent_repliers",
+           td::json_array(message_reply_info_->recent_replier_ids_, [client = client_](auto &recent_replier_id) {
+             return JsonMessageSender(recent_replier_id.get(), client);
+           }));
     object("last_read_inbox_message_id", message_reply_info_->last_read_inbox_message_id_);
     object("last_read_outbox_message_id", message_reply_info_->last_read_outbox_message_id_);
     object("last_message_id", message_reply_info_->last_message_id_);
@@ -1730,7 +1733,6 @@ class Client::JsonMessageReplyInfo final : public Jsonable {
   const td_api::messageReplyInfo *message_reply_info_;
   const Client *client_;
 };
-
 
 class Client::JsonMessageReaction final : public Jsonable {
  public:
@@ -1742,14 +1744,16 @@ class Client::JsonMessageReaction final : public Jsonable {
     object("reaction", message_reaction_->reaction_);
     object("total_count", message_reaction_->total_count_);
     object("is_chosen", td::JsonBool(message_reaction_->is_chosen_));
-    object("recent_senders", td::json_array(message_reaction_->recent_sender_ids_, [client = client_](auto & recent_sender_id) { return JsonMessageSender(recent_sender_id.get(), client); }));
+    object("recent_senders",
+           td::json_array(message_reaction_->recent_sender_ids_, [client = client_](auto &recent_sender_id) {
+             return JsonMessageSender(recent_sender_id.get(), client);
+           }));
   }
 
  private:
   const td_api::messageReaction *message_reaction_;
   const Client *client_;
 };
-
 
 class Client::JsonMessageInteractionInfo final : public Jsonable {
  public:
@@ -1765,9 +1769,9 @@ class Client::JsonMessageInteractionInfo final : public Jsonable {
       object("reply_info", JsonMessageReplyInfo(message_interaction_info_->reply_info_.get(), client_));
     }
 
-    object("reactions", td::json_array(message_interaction_info_->reactions_,
-        [client = client_](auto &reaction) { return JsonMessageReaction(reaction.get(), client); }));
-    
+    object("reactions", td::json_array(message_interaction_info_->reactions_, [client = client_](auto &reaction) {
+             return JsonMessageReaction(reaction.get(), client);
+           }));
   }
 
  private:
@@ -2849,7 +2853,7 @@ class Client::JsonMessagesArray final : public Jsonable {
   Client *client_;
 };
 
-class Client::JsonProxy final: public Jsonable {
+class Client::JsonProxy final : public Jsonable {
  public:
   explicit JsonProxy(object_ptr<td_api::proxy> &proxy) : proxy_(proxy) {
   }
@@ -3052,8 +3056,6 @@ class Client::JsonChatInviteLinkInfo final : public Jsonable {
   const td_api::chatInviteLinkInfo *chat_invite_link_info_;
   const Client *client_;
 };
-
-
 
 class Client::JsonAddedReaction final : public Jsonable {
  public:
@@ -6310,8 +6312,10 @@ td::Result<td_api::object_ptr<td_api::InputMessageContent>> Client::get_input_me
 }
 
 td_api::object_ptr<td_api::messageSendOptions> Client::get_message_send_options(
-    bool disable_notification, bool protect_content, td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state) {
-  return make_object<td_api::messageSendOptions>(disable_notification, false, protect_content, std::move(scheduling_state));
+    bool disable_notification, bool protect_content,
+    td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state) {
+  return make_object<td_api::messageSendOptions>(disable_notification, false, protect_content,
+                                                 std::move(scheduling_state));
 }
 
 td::Result<td::vector<td_api::object_ptr<td_api::InputInlineQueryResult>>> Client::get_inline_query_results(
@@ -8077,18 +8081,19 @@ td::Status Client::process_send_media_group_query(PromisedQueryPtr &query) {
       [this, chat_id = chat_id.str(), reply_to_message_id, allow_sending_without_reply, disable_notification,
        protect_content, input_message_contents = std::move(input_message_contents),
        send_at = std::move(send_at)](object_ptr<td_api::ReplyMarkup> reply_markup, PromisedQueryPtr query) mutable {
-        auto on_success = [this, disable_notification, protect_content, input_message_contents = std::move(input_message_contents),
+        auto on_success = [this, disable_notification, protect_content,
+                           input_message_contents = std::move(input_message_contents),
                            reply_markup = std::move(reply_markup), send_at = std::move(send_at)](
                               int64 chat_id, int64 reply_to_message_id, PromisedQueryPtr query) mutable {
           auto it = yet_unsent_message_count_.find(chat_id);
           if (it != yet_unsent_message_count_.end() && it->second > MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
             return query->set_retry_after_error(60);
           }
-          send_request(
-              make_object<td_api::sendMessageAlbum>(chat_id, 0, reply_to_message_id,
-                                                    get_message_send_options(disable_notification, protect_content, std::move(send_at)),
-                                                    std::move(input_message_contents)),
-              std::make_unique<TdOnSendMessageAlbumCallback>(this, std::move(query)));
+          send_request(make_object<td_api::sendMessageAlbum>(
+                           chat_id, 0, reply_to_message_id,
+                           get_message_send_options(disable_notification, protect_content, std::move(send_at)),
+                           std::move(input_message_contents)),
+                       std::make_unique<TdOnSendMessageAlbumCallback>(this, std::move(query)));
         };
         check_message(chat_id, reply_to_message_id, reply_to_message_id <= 0 || allow_sending_without_reply,
                       AccessRights::Write, "replied message", std::move(query), std::move(on_success));
@@ -9796,7 +9801,6 @@ td::Status Client::process_check_chat_invite_link(PromisedQueryPtr &query) {
 }
 
 td::Status Client::process_get_message_added_reactions(PromisedQueryPtr &query) {
-
   auto chat_id = query->arg("chat_id");
   auto message_id = get_message_id(query.get(), "message_id");
   auto reaction = query->arg("reaction");
@@ -9804,10 +9808,12 @@ td::Status Client::process_get_message_added_reactions(PromisedQueryPtr &query) 
   auto limit = get_integer_arg(query.get(), "limit", 0, 0);
 
   check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
-              [this, reaction = reaction.str(), offset = offset.str(), limit](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
-              send_request(make_object<td_api::getMessageAddedReactions>(chat_id, message_id, reaction, offset, limit),
-                          std::make_unique<TdOnGetMessageAddedReactionsCallback>(this, std::move(query)));
-              });
+                [this, reaction = reaction.str(), offset = offset.str(), limit](int64 chat_id, int64 message_id,
+                                                                                PromisedQueryPtr query) {
+                  send_request(
+                      make_object<td_api::getMessageAddedReactions>(chat_id, message_id, reaction, offset, limit),
+                      std::make_unique<TdOnGetMessageAddedReactionsCallback>(this, std::move(query)));
+                });
 
   return Status::OK();
 }
@@ -10106,18 +10112,19 @@ void Client::do_send_message(object_ptr<td_api::InputMessageContent> input_messa
       [this, chat_id = chat_id.str(), reply_to_message_id, allow_sending_without_reply, disable_notification,
        protect_content, input_message_content = std::move(input_message_content),
        send_at = std::move(send_at)](object_ptr<td_api::ReplyMarkup> reply_markup, PromisedQueryPtr query) mutable {
-        auto on_success = [this, disable_notification, protect_content, input_message_content = std::move(input_message_content),
+        auto on_success = [this, disable_notification, protect_content,
+                           input_message_content = std::move(input_message_content),
                            reply_markup = std::move(reply_markup), send_at = std::move(send_at)](
                               int64 chat_id, int64 reply_to_message_id, PromisedQueryPtr query) mutable {
           auto it = yet_unsent_message_count_.find(chat_id);
           if (it != yet_unsent_message_count_.end() && it->second > MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
             return query->set_retry_after_error(60);
           }
-          send_request(
-              make_object<td_api::sendMessage>(chat_id, 0, reply_to_message_id,
-                                               get_message_send_options(disable_notification, protect_content, std::move(send_at)),
-                                               std::move(reply_markup), std::move(input_message_content)),
-              std::make_unique<TdOnSendMessageCallback>(this, std::move(query)));
+          send_request(make_object<td_api::sendMessage>(
+                           chat_id, 0, reply_to_message_id,
+                           get_message_send_options(disable_notification, protect_content, std::move(send_at)),
+                           std::move(reply_markup), std::move(input_message_content)),
+                       std::make_unique<TdOnSendMessageCallback>(this, std::move(query)));
         };
         check_message(chat_id, reply_to_message_id, reply_to_message_id <= 0 || allow_sending_without_reply,
                       AccessRights::Write, "replied message", std::move(query), std::move(on_success));
@@ -11420,7 +11427,7 @@ Client::FullMessageId Client::add_message(object_ptr<td_api::message> &&message,
   message_info->initial_author_signature = td::string();
   message_info->initial_sender_name = td::string();
   // message_info->interaction_info = nullptr;
-  
+
   if (message->forward_info_ != nullptr) {
     message_info->initial_send_date = message->forward_info_->date_;
     auto origin = std::move(message->forward_info_->origin_);
