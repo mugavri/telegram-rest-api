@@ -503,9 +503,8 @@ class Client final : public WebhookActor::Callback {
   td::Result<td::vector<object_ptr<td_api::InputMessageContent>>> get_input_message_contents(
       const Query *query, td::JsonValue &&value) const;
 
-  static object_ptr<td_api::messageSendOptions> get_message_send_options(bool disable_notification,
-                                                                         bool protect_content,
-                                                                         object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
+  static object_ptr<td_api::messageSendOptions> get_message_send_options(
+      bool disable_notification, bool protect_content, object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
 
   static td::Result<td::vector<td::string>> get_poll_options(const Query *query);
 

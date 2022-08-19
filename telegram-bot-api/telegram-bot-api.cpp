@@ -243,15 +243,18 @@ int main(int argc, char *argv[]) {
   options.add_option('\0', "version", "display version number and exit", [&] { need_print_version = true; });
   options.add_option('\0', "local", "allow the Bot API server to serve local requests",
                      [&] { parameters->local_mode_ = true; });
-  options.add_option('\0', "no-file-limit", "disable the file limits",
-		             [&] { parameters->no_file_limit_ = true; });
-  options.add_option('\0', "insecure", "allow the Bot API to send request via insecure HTTP", [&] { parameters->allow_http_ = true; });
-  options.add_option('\0', "relative", "use relative file path in local mode", [&] { parameters->use_relative_path_ = true; });
-  options.add_option('\0', "allow-users", "allow user accounts to use the API", [&] { parameters->allow_users_ = true; });
+  options.add_option('\0', "no-file-limit", "disable the file limits", [&] { parameters->no_file_limit_ = true; });
+  options.add_option('\0', "insecure", "allow the Bot API to send request via insecure HTTP",
+                     [&] { parameters->allow_http_ = true; });
+  options.add_option('\0', "relative", "use relative file path in local mode",
+                     [&] { parameters->use_relative_path_ = true; });
+  options.add_option('\0', "allow-users", "allow user accounts to use the API",
+                     [&] { parameters->allow_users_ = true; });
   options.add_option('\0', "allow-users-registration", "allow user accounts to be registered on the API",
                      [&] { parameters->allow_users_registration_ = true; });
 
-  options.add_option('\0', "stats-hide-sensible-data", "in the stats hide sensible data like bot token and webhook url", [&] { parameters->stats_hide_sensible_data_ = true; });
+  options.add_option('\0', "stats-hide-sensible-data", "in the stats hide sensible data like bot token and webhook url",
+                     [&] { parameters->stats_hide_sensible_data_ = true; });
 
   options.add_checked_option(
       '\0', "api-id",
@@ -320,12 +323,16 @@ int main(int argc, char *argv[]) {
   options.add_checked_option('c', "max-connections", "maximum number of open file descriptors",
                              td::OptionParser::parse_integer(max_connections));
 
-  options.add_checked_option('\0', "max-batch-operations", PSLICE() << "maximum number of batch operations (default: " << parameters->max_batch_operations << ")",
-                            td::OptionParser::parse_integer(parameters->max_batch_operations));
-  options.add_checked_option('\0', "file-expiration-time",
-                             PSLICE() << "downloaded files expire after this amount of seconds of not being used (defaults to " << parameters->file_expiration_timeout_seconds_ << ")",
-                             td::OptionParser::parse_integer(parameters->file_expiration_timeout_seconds_));
-                             
+  options.add_checked_option(
+      '\0', "max-batch-operations",
+      PSLICE() << "maximum number of batch operations (default: " << parameters->max_batch_operations << ")",
+      td::OptionParser::parse_integer(parameters->max_batch_operations));
+  options.add_checked_option(
+      '\0', "file-expiration-time",
+      PSLICE() << "downloaded files expire after this amount of seconds of not being used (defaults to "
+               << parameters->file_expiration_timeout_seconds_ << ")",
+      td::OptionParser::parse_integer(parameters->file_expiration_timeout_seconds_));
+
   options.add_checked_option('\0', "proxy",
                              "HTTP proxy server for outgoing webhook requests in the format http://host:port",
                              [&](td::Slice address) {
