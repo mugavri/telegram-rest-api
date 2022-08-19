@@ -8,8 +8,8 @@
 
 #include "telegram-bot-api/Client.h"
 #include "telegram-bot-api/ClientParameters.h"
-#include "telegram-bot-api/WebhookActor.h"
 #include "telegram-bot-api/StatsJson.h"
+#include "telegram-bot-api/WebhookActor.h"
 
 #include "td/telegram/ClientActor.h"
 #include "td/telegram/td_api.h"
@@ -24,6 +24,7 @@
 
 #include "td/actor/MultiPromise.h"
 
+#include "td/utils/base64.h"
 #include "td/utils/common.h"
 #include "td/utils/format.h"
 #include "td/utils/logging.h"
@@ -31,13 +32,12 @@
 #include "td/utils/Parser.h"
 #include "td/utils/port/IPAddress.h"
 #include "td/utils/port/Stat.h"
+#include "td/utils/Random.h"
 #include "td/utils/Slice.h"
 #include "td/utils/SliceBuilder.h"
 #include "td/utils/StackAllocator.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
-#include "td/utils/Random.h"
-#include "td/utils/base64.h"
 
 #include <map>
 #include <tuple>
@@ -107,16 +107,17 @@ void ClientManager::send(PromisedQueryPtr query) {
     auto id =
         clients_.create(ClientInfo{BotStatActor(stat_.actor_id(&stat_)), token, tqueue_id, td::ActorOwn<Client>()});
     auto *client_info = clients_.get(id);
-    client_info->client_ = td::create_actor<Client>(PSLICE() << "Client/" << token, actor_shared(this, id),
-                                                    query->token().str(),  query->is_user(), query->is_test_dc(),
-                                                    tqueue_id, parameters_, client_info->stat_.actor_id(&client_info->stat_));
+    client_info->client_ = td::create_actor<Client>(
+        PSLICE() << "Client/" << token, actor_shared(this, id), query->token().str(), query->is_user(),
+        query->is_test_dc(), tqueue_id, parameters_, client_info->stat_.actor_id(&client_info->stat_));
 
     auto method = query->method();
     if (method != "deletewebhook" && method != "setwebhook") {
       auto webhook_info = parameters_->shared_data_->webhook_db_->get(bot_token_with_dc);
       if (!webhook_info.empty()) {
-        send_closure(client_info->client_, &Client::send,
-                     get_webhook_restore_query(bot_token_with_dc, query->is_user(), webhook_info, parameters_->shared_data_));
+        send_closure(
+            client_info->client_, &Client::send,
+            get_webhook_restore_query(bot_token_with_dc, query->is_user(), webhook_info, parameters_->shared_data_));
       }
     }
 
@@ -138,7 +139,7 @@ void ClientManager::user_login(PromisedQueryPtr query) {
     return fail_query(401, "Unauthorized: invalid phone number specified", std::move(query));
   }
   td::int64 phone_number = 0;
-  for (char const &c: r_phone_number) {
+  for (char const &c : r_phone_number) {
     if (isdigit(c)) {
       phone_number = phone_number * 10 + (c - 48);
     }
@@ -155,7 +156,8 @@ void ClientManager::user_login(PromisedQueryPtr query) {
     // return query->set_retry_after_error(1);
   }
 
-  auto id = clients_.create(ClientInfo{BotStatActor(stat_.actor_id(&stat_)), user_token, tqueue_id, td::ActorOwn<Client>()});
+  auto id =
+      clients_.create(ClientInfo{BotStatActor(stat_.actor_id(&stat_)), user_token, tqueue_id, td::ActorOwn<Client>()});
   auto *client_info = clients_.get(id);
   auto stat_actor = client_info->stat_.actor_id(&client_info->stat_);
   auto client_id = td::create_actor<Client>(PSLICE() << "Client/" << user_token, actor_shared(this, id), user_token,
@@ -197,28 +199,50 @@ bool ClientManager::check_flood_limits(PromisedQueryPtr &query, bool is_user_log
     auto &flood_control = res.first->second;
     if (res.second) {
       if (is_user_login) {
-        flood_control.add_limit(60, 5);         // 5 in a minute
-        flood_control.add_limit(60 * 60, 15);   // 15 in an hour
+        flood_control.add_limit(60, 5);        // 5 in a minute
+        flood_control.add_limit(60 * 60, 15);  // 15 in an hour
       } else {
         flood_control.add_limit(60, 20);        // 20 in a minute
         flood_control.add_limit(60 * 60, 600);  // 600 in an hour
       }
+      auto now = static_cast<td::uint32>(td::Time::now());
+      td::uint32 wakeup_at = flood_control.get_wakeup_at();
+      if (wakeup_at > now) {
+        LOG(INFO) << "Failed to create Client from IP address " << ip_address;
+        return query->set_retry_after_error(static_cast<int>(wakeup_at - now) + 1);
+      }
+      flood_control.add_event(static_cast<td::int32>(now));
     }
-    auto now = static_cast<td::uint32>(td::Time::now());
-    td::uint32 wakeup_at = flood_control.get_wakeup_at();
-    if (wakeup_at > now) {
-      LOG(INFO) << "Failed to create Client from IP address " << ip_address;
-      query->set_retry_after_error(static_cast<int>(wakeup_at - now) + 1);
-      return false;
+    auto tqueue_id = get_tqueue_id(user_id, query->is_test_dc());
+    if (active_client_count_.count(tqueue_id) != 0) {
+      // return query->set_retry_after_error(1);
     }
-    flood_control.add_event(static_cast<td::int32>(now));
+
+    auto id =
+        clients_.create(ClientInfo{BotStatActor(stat_.actor_id(&stat_)), token, tqueue_id, td::ActorOwn<Client>()});
+    auto *client_info = clients_.get(id);
+    client_info->client_ = td::create_actor<Client>(PSLICE() << "Client/" << token, actor_shared(this, id),
+                                                    query->token().str(), query->is_test_dc(), tqueue_id, parameters_,
+                                                    client_info->stat_.actor_id(&client_info->stat_));
+
+    auto method = query->method();
+    if (method != "deletewebhook" && method != "setwebhook") {
+      auto bot_token_with_dc = PSTRING() << query->token() << (query->is_test_dc() ? ":T" : "");
+      auto webhook_info = parameters_->shared_data_->webhook_db_->get(bot_token_with_dc);
+      if (!webhook_info.empty()) {
+        send_closure(client_info->client_, &Client::send,
+                     get_webhook_restore_query(bot_token_with_dc, webhook_info, parameters_->shared_data_));
+      }
+    }
+
+    std::tie(id_it, std::ignore) = token_to_id_.emplace(token, id);
   }
-  return true;
+  send_closure(clients_.get(id_it->second)->client_, &Client::send,
+               std::move(query));  // will send 429 if the client is already closed
 }
 
-void ClientManager::get_stats(td::PromiseActor<td::BufferSlice> promise,
-                              td::vector<std::pair<td::string, td::string>> args,
-                              bool as_json) {
+void ClientManager::get_stats(td::Promise<td::BufferSlice> promise,
+                              td::vector<std::pair<td::string, td::string>> args) {
   if (close_flag_) {
     promise.set_value(td::BufferSlice("Closing"));
     return;
@@ -285,130 +309,67 @@ void ClientManager::get_stats(td::PromiseActor<td::BufferSlice> promise,
     top_bot_ids.emplace(static_cast<td::int64>(score * 1e9), id);
   }
 
-  if(!as_json) {
-    sb << stat_.get_description() << '\n';
-  }
+  sb << stat_.get_description() << '\n';
   if (id_filter.empty()) {
-    if(as_json) {
-      jb_root("uptime", td::JsonFloat(now - parameters_->start_time_));
-    } else {
-      sb << "uptime\t" << now - parameters_->start_time_ << '\n';
-    }
-    if(as_json) {
-      jb_root("bot_count", td::JsonLong(clients_.size()));
-    } else {
-      sb << "bot_count\t" << clients_.size() << '\n';
-    }
-    if(as_json) {
-      jb_root("active_bot_count", td::JsonInt(active_bot_count));
-    } else {
-      sb << "active_bot_count\t" << active_bot_count << '\n';
-    }
+    sb << "uptime\t" << now - parameters_->start_time_ << '\n';
+    sb << "bot_count\t" << clients_.size() << '\n';
+    sb << "active_bot_count\t" << active_bot_count << '\n';
     auto r_mem_stat = td::mem_stat();
     if (r_mem_stat.is_ok()) {
       auto mem_stat = r_mem_stat.move_as_ok();
-      if(as_json) {
-        jb_root("memory", JsonStatsMem(mem_stat));
-      } else {
-        sb << "rss\t" << td::format::as_size(mem_stat.resident_size_) << '\n';
-        sb << "vm\t" << td::format::as_size(mem_stat.virtual_size_) << '\n';
-        sb << "rss_peak\t" << td::format::as_size(mem_stat.resident_size_peak_) << '\n';
-        sb << "vm_peak\t" << td::format::as_size(mem_stat.virtual_size_peak_) << '\n';
-      }
+      sb << "rss\t" << td::format::as_size(mem_stat.resident_size_) << '\n';
+      sb << "vm\t" << td::format::as_size(mem_stat.virtual_size_) << '\n';
+      sb << "rss_peak\t" << td::format::as_size(mem_stat.resident_size_peak_) << '\n';
+      sb << "vm_peak\t" << td::format::as_size(mem_stat.virtual_size_peak_) << '\n';
     } else {
-      if(as_json) {
-        jb_root("memory", td::JsonNull());
-      } else {
-        LOG(INFO) << "Failed to get memory statistics: " << r_mem_stat.error();
-      }
+      LOG(INFO) << "Failed to get memory statistics: " << r_mem_stat.error();
     }
 
     ServerCpuStat::update(td::Time::now());
-    if(as_json) {
-      auto cpu_stats = ServerCpuStat::instance().as_json_ready_vector(td::Time::now());
-      jb_root("cpu", JsonStatsCpu(std::move(cpu_stats)));
-    } else {
-      auto cpu_stats = ServerCpuStat::instance().as_vector(td::Time::now());
-      for (auto &stat : cpu_stats) {
-        sb << stat.key_ << "\t" << stat.value_ << '\n';
-      }
+    auto cpu_stats = ServerCpuStat::instance().as_vector(td::Time::now());
+    for (auto &stat : cpu_stats) {
+      sb << stat.key_ << "\t" << stat.value_ << '\n';
     }
 
-    if(as_json) {
-      jb_root("buffer_memory", JsonStatsSize(td::BufferAllocator::get_buffer_mem()));
-      jb_root("active_webhook_connections", td::JsonLong(WebhookActor::get_total_connections_count()));
-      jb_root("active_requests", td::JsonLong(parameters_->shared_data_->query_count_.load()));
-      jb_root("active_network_queries", td::JsonLong(td::get_pending_network_query_count(*parameters_->net_query_stats_)));
-    } else {
-      sb << "buffer_memory\t" << td::format::as_size(td::BufferAllocator::get_buffer_mem()) << '\n';
-      sb << "active_webhook_connections\t" << WebhookActor::get_total_connections_count() << '\n';
-      sb << "active_requests\t" << parameters_->shared_data_->query_count_.load() << '\n';
-      sb << "active_network_queries\t" << td::get_pending_network_query_count(*parameters_->net_query_stats_) << '\n';
-    }
-    if(as_json) {
-    } else {
-      auto stats = stat_.as_vector(now);
-      for (auto &stat : stats) {
-        sb << stat.key_ << "\t" << stat.value_ << '\n';
-      }
+    sb << "buffer_memory\t" << td::format::as_size(td::BufferAllocator::get_buffer_mem()) << '\n';
+    sb << "active_webhook_connections\t" << WebhookActor::get_total_connections_count() << '\n';
+    sb << "active_requests\t" << parameters_->shared_data_->query_count_.load() << '\n';
+    sb << "active_network_queries\t" << td::get_pending_network_query_count(*parameters_->net_query_stats_) << '\n';
+    auto stats = stat_.as_vector(now);
+    for (auto &stat : stats) {
+      sb << stat.key_ << "\t" << stat.value_ << '\n';
     }
   }
 
-  if(as_json) {
-    td::vector<JsonStatsBotAdvanced> bots;
-    for (std::pair<td::int64, td::uint64>  top_bot_id : top_bot_ids) {
-      auto client_info = clients_.get(top_bot_id.second);
-      CHECK(client_info);
-      ServerBotInfo bot_info = client_info->client_->get_actor_unsafe()->get_bot_info();
-      auto stats = client_info->stat_.as_json_ready_vector(now);
-      JsonStatsBotAdvanced bot(
-          std::move(top_bot_id), std::move(bot_info), std::move(stats), parameters_->stats_hide_sensible_data_, now
-        );
-      bots.push_back(bot);
-    }
-    auto bot_count = bots.size();
-    jb_root("bots", JsonStatsBots(std::move(bots), bot_count > 100));
-  } else {
-    for (auto top_bot_id : top_bot_ids) {
-      auto *client_info = clients_.get(top_bot_id.second);
-      CHECK(client_info);
-      auto bot_info = client_info->client_->get_actor_unsafe()->get_bot_info();
+  for (auto top_bot_id : top_bot_ids) {
+    auto *client_info = clients_.get(top_bot_id.second);
+    CHECK(client_info);
 
-      sb << '\n';
-      sb << "id\t" << bot_info.id_ << '\n';
-      sb << "uptime\t" << now - bot_info.start_time_ << '\n';
-      if (!parameters_->stats_hide_sensible_data_) {
-        sb << "token\t" << bot_info.token_ << '\n';
-      }
-      sb << "username\t" << bot_info.username_ << '\n';
-      if (!parameters_->stats_hide_sensible_data_) {
-        sb << "webhook\t" << bot_info.webhook_ << '\n';
-      } else if (bot_info.webhook_.empty()) {
-        sb << "webhook disabled" << '\n';
-      } else {
-        sb << "webhook enabled" << '\n';
-      }
-      sb << "has_custom_certificate\t" << bot_info.has_webhook_certificate_ << '\n';
-      sb << "head_update_id\t" << bot_info.head_update_id_ << '\n';
-      sb << "tail_update_id\t" << bot_info.tail_update_id_ << '\n';
-      sb << "pending_update_count\t" << bot_info.pending_update_count_ << '\n';
-      sb << "webhook_max_connections\t" << bot_info.webhook_max_connections_ << '\n';
+    auto bot_info = client_info->client_->get_actor_unsafe()->get_bot_info();
+    sb << '\n';
+    sb << "id\t" << bot_info.id_ << '\n';
+    sb << "uptime\t" << now - bot_info.start_time_ << '\n';
+    sb << "token\t" << bot_info.token_ << '\n';
+    sb << "username\t" << bot_info.username_ << '\n';
+    sb << "is_active\t" << client_info->stat_.is_active(now) << '\n';
+    sb << "webhook\t" << bot_info.webhook_ << '\n';
+    sb << "has_custom_certificate\t" << bot_info.has_webhook_certificate_ << '\n';
+    sb << "head_update_id\t" << bot_info.head_update_id_ << '\n';
+    sb << "tail_update_id\t" << bot_info.tail_update_id_ << '\n';
+    sb << "pending_update_count\t" << bot_info.pending_update_count_ << '\n';
+    sb << "webhook_max_connections\t" << bot_info.webhook_max_connections_ << '\n';
 
-      auto stats = client_info->stat_.as_vector(now);
-      for (auto &stat : stats) {
-        if (stat.key_ == "update_count" || stat.key_ == "request_count") {
-          sb << stat.key_ << "/sec\t" << stat.value_ << '\n';
-        }
-      }
-      if (sb.is_error()) {
-        break;
+    auto stats = client_info->stat_.as_vector(now);
+    for (auto &stat : stats) {
+      if (stat.key_ == "update_count" || stat.key_ == "request_count") {
+        sb << stat.key_ << "/sec\t" << stat.value_ << '\n';
       }
     }
-  }
-  if(as_json) {
-    jb_root.leave();
-  }
 
+    if (sb.is_error()) {
+      break;
+    }
+  }
   // ignore sb overflow
   promise.set_value(td::BufferSlice((as_json ? jb.string_builder() : sb).as_cslice()));
 }
@@ -468,11 +429,6 @@ void ClientManager::start_up() {
   LOG_IF(FATAL, status.is_error()) << "Can't open webhooks_db.binlog " << status.error();
   parameters_->shared_data_->webhook_db_ = std::move(concurrent_webhook_db);
 
-  auto concurrent_user_db = td::make_unique<td::BinlogKeyValue<td::ConcurrentBinlog>>();
-  status = concurrent_user_db->init(parameters_->working_directory_ + "user_db.binlog", td::DbKey::empty(), scheduler_id);
-  LOG_IF(FATAL, status.is_error()) << "Can't open user_db.binlog " << status.error();
-  parameters_->shared_data_->user_db_ = std::move(concurrent_user_db);
-
   auto &webhook_db = *parameters_->shared_data_->webhook_db_;
   auto &user_db = *parameters_->shared_data_->user_db_;
   for (auto key_value : webhook_db.get_all()) {
@@ -482,10 +438,9 @@ void ClientManager::start_up() {
       continue;
     }
 
-    auto query = get_webhook_restore_query(key_value.first, user_db.isset(key_value.first), key_value.second, parameters_->shared_data_);
+    auto query = get_webhook_restore_query(key_value.first, key_value.second, parameters_->shared_data_);
     send_closure_later(actor_id(this), &ClientManager::send, std::move(query));
   }
-
 }
 
 PromisedQueryPtr ClientManager::get_webhook_restore_query(td::Slice token, bool is_user, td::Slice webhook_info,
@@ -541,10 +496,10 @@ PromisedQueryPtr ClientManager::get_webhook_restore_query(td::Slice token, bool 
   args.emplace_back(add_string("url"), add_string(parser.read_all()));
 
   const auto method = add_string("setwebhook");
-  auto query = td::make_unique<Query>(std::move(containers), token, is_user, is_test_dc, method, std::move(args),
-                                       td::vector<std::pair<td::MutableSlice, td::MutableSlice>>(),
-                                       td::vector<td::HttpFile>(), std::move(shared_data), td::IPAddress(), true);
-  return PromisedQueryPtr(query.release(), PromiseDeleter(td::PromiseActor<td::unique_ptr<Query>>()));
+  auto query = td::make_unique<Query>(std::move(containers), token, is_test_dc, method, std::move(args),
+                                      td::vector<std::pair<td::MutableSlice, td::MutableSlice>>(),
+                                      td::vector<td::HttpFile>(), std::move(shared_data), td::IPAddress(), true);
+  return PromisedQueryPtr(query.release(), PromiseDeleter(td::Promise<td::unique_ptr<Query>>()));
 }
 
 void ClientManager::raw_event(const td::Event::Raw &event) {
