@@ -255,6 +255,11 @@ class Client final : public WebhookActor::Callback {
   class JsonFoundMessages;
   class JsonProxy;
   class JsonProxiesArray;
+  class JsonMessageInteractionInfo;
+  class JsonMessageReplyInfo;
+  class JsonMessageReactions;
+  class JsonMessageReaction;
+  class JsonMessageInteractionCount;
   //stop custom Json objects
 
   class TdOnOkCallback;
@@ -673,10 +678,9 @@ class Client final : public WebhookActor::Callback {
 
   td::Result<object_ptr<td_api::inputMessageInvoice>> get_input_message_invoice(const Query *query) const;
 
-  static object_ptr<td_api::messageSendOptions> get_message_send_options(bool disable_notification,
-                                                                         bool protect_content,
-                                                                         bool allow_paid_broadcast, int64 effect_id,
-                                                                         object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
+  static object_ptr<td_api::messageSendOptions> get_message_send_options(
+      bool disable_notification, bool protect_content, bool allow_paid_broadcast, int64 effect_id,
+      object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
 
   static td::Result<td::vector<object_ptr<td_api::formattedText>>> get_poll_options(const Query *query);
 
@@ -733,8 +737,8 @@ class Client final : public WebhookActor::Callback {
   static int64 get_int64_arg(const Query *query, td::Slice field_name, int64 default_value,
                              int64 min_value = std::numeric_limits<int64>::min(),
                              int64 max_value = std::numeric_limits<int64>::max());
-  static td::Result<td_api::object_ptr<td_api::ReportReason>> get_report_reason(const Query *query,
-                                                                                    td::Slice field_name = td::Slice("reason"));
+  static td::Result<td_api::object_ptr<td_api::ReportReason>> get_report_reason(
+      const Query *query, td::Slice field_name = td::Slice("reason"));
 
   static td::Result<td_api::object_ptr<td_api::SearchMessagesFilter>> get_search_messages_filter(
       const Query *query, td::Slice field_name = td::Slice("filter"));
@@ -949,7 +953,6 @@ class Client final : public WebhookActor::Callback {
   void process_authcode_query(PromisedQueryPtr &query);
   void process_2fapassword_query(PromisedQueryPtr &query);
   void process_register_user_query(PromisedQueryPtr &query);
-
 
   void webhook_verified(td::string cached_ip_address) final;
   void webhook_success() final;
@@ -1186,6 +1189,9 @@ class Client final : public WebhookActor::Callback {
     int32 forwards = 0;
 
     int32 scheduled_at = 0;
+
+    object_ptr<td_api::messageInteractionInfo> interaction_info;
+
     // end custom properties
 
     bool can_be_saved = false;
