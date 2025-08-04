@@ -264,6 +264,10 @@ paths:
                 last_name:
                   description: The last name of the user; 0-64 characters.
                   type: string
+                disable_notification:
+                  description: Disables "user joined Telegram" notification for other users that have the contact in their contact list.
+                  default: false
+                  type: boolean
               required:
                 - first_name
           multipart/form-data:
@@ -276,6 +280,10 @@ paths:
                 last_name:
                   description: The last name of the user; 0-64 characters.
                   type: string
+                disable_notification:
+                  description: Disables "user joined Telegram" notification for other users that have the contact in their contact list.
+                  default: false
+                  type: boolean
               required:
                 - first_name
           application/json:
@@ -288,6 +296,10 @@ paths:
                 last_name:
                   description: The last name of the user; 0-64 characters.
                   type: string
+                disable_notification:
+                  description: Disables "user joined Telegram" notification for other users that have the contact in their contact list.
+                  default: false
+                  type: boolean
               required:
                 - first_name
         required: true
@@ -547,16 +559,23 @@ paths:
   /deleteMessages:
     post:
       tags:
-        - added
+        - modified
       description: |-
-        Delete all the messages with message_id in range between start and end.
-        The start parameter MUST be less than the end parameter
-        Both start and end must be positive non zero numbers
-        The method will always return true as a result, even if the messages cannot be deleted
-        This method does not work on private chat or normal groups It is not suggested to delete more than 200 messages per call.
+        Use this method to delete multiple messages simultaneously.
+        This method can delete a set of message ids, or a range of message ids.
+        
+        If you specify "message_ids", this method tries to delete the specified set of ids:
+          If some of the specified messages can't be found, they are skipped.
+          Returns True on success.
 
-        *NOTE*
-        The maximum number of messages to be deleted in a single batch is determined by the max-batch-operations parameter and is 10000 by default.
+        If you specify "start" and "end", this method deletes all the messages with message_id in range between start and end:
+          The start parameter MUST be less than the end parameter
+          Both start and end must be positive non zero numbers
+          The method will always return true as a result, even if the messages cannot be deleted
+          This method does not work on private chat or normal groups It is not suggested to delete more than 200 messages per call.
+
+          *NOTE*
+          The maximum number of messages to be deleted in a single batch is determined by the max-batch-operations parameter and is 10000 by default.
       requestBody:
         content:
           application/x-www-form-urlencoded:
@@ -568,6 +587,10 @@ paths:
                   anyOf:
                     - type: integer
                     - type: string
+                message_ids:
+                  type: array
+                  items:
+                    type: integer
                 start:
                   description: First message id to delete
                   type: integer
@@ -576,8 +599,6 @@ paths:
                   type: integer
               required:
                 - chat_id
-                - start
-                - end
           multipart/form-data:
             schema:
               type: object
@@ -587,6 +608,10 @@ paths:
                   anyOf:
                     - type: integer
                     - type: string
+                message_ids:
+                  type: array
+                  items:
+                    type: integer
                 start:
                   description: First message id to delete
                   type: integer
@@ -595,8 +620,6 @@ paths:
                   type: integer
               required:
                 - chat_id
-                - start
-                - end
           application/json:
             schema:
               type: object
@@ -606,6 +629,10 @@ paths:
                   anyOf:
                     - type: integer
                     - type: string
+                message_ids:
+                  type: array
+                  items:
+                    type: integer
                 start:
                   description: First message id to delete
                   type: integer
@@ -614,12 +641,10 @@ paths:
                   type: integer
               required:
                 - chat_id
-                - start
-                - end
         required: true
       responses:
         '200':
-          description: ''
+          description: 'Request was successful, the result is returned.'
           content:
             application/json:
               schema:
@@ -805,90 +830,6 @@ paths:
         *ONLY FOR USERS*
 
         Returns a list of recently inactive supergroups and channels. Can be used when user reaches limit on the number of joined supergroups and channels and receives CHANNELS_TOO_MUCH error.
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    default: true
-                    type: boolean
-                  result:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Chat'
-                required:
-                  - ok
-                  - result
-        default:
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-  /getNearbyChats:
-    post:
-      tags:
-        - added
-        - user-only
-      description: |-
-        *ONLY FOR USERS*
-
-        Returns a list of chats nearby the specified location. Telegram may send old results if you change your location too quick.
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                latitude:
-                  description: Latitude of the location
-                  type: number
-                longitude:
-                  description: Longitude of the location
-                  type: number
-                horizontal_accuracy:
-                  description: 'The radius of uncertainty for the location, measured in meters; 0-1500'
-                  type: number
-              required:
-                - latitude
-                - longitude
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                latitude:
-                  description: Latitude of the location
-                  type: number
-                longitude:
-                  description: Longitude of the location
-                  type: number
-                horizontal_accuracy:
-                  description: 'The radius of uncertainty for the location, measured in meters; 0-1500'
-                  type: number
-              required:
-                - latitude
-                - longitude
-          application/json:
-            schema:
-              type: object
-              properties:
-                latitude:
-                  description: Latitude of the location
-                  type: number
-                longitude:
-                  description: Longitude of the location
-                  type: number
-                horizontal_accuracy:
-                  description: 'The radius of uncertainty for the location, measured in meters; 0-1500'
-                  type: number
-              required:
-                - latitude
-                - longitude
-        required: true
       responses:
         '200':
           description: ''
@@ -1458,6 +1399,10 @@ paths:
                 query:
                   description: Query to search for.
                   type: string
+                chat_filter:
+                  description: |-
+                    Filter for chat type in search result. Must be one of `private`, `group` or `channel`
+                  type: string
                 offset_date:
                   description: The date of the message starting from which the results should be fetched. Use 0 or any date in the future to get results from the last message.
                   type: integer
@@ -1492,6 +1437,10 @@ paths:
                 query:
                   description: Query to search for.
                   type: string
+                only_in_channels:
+                  description: Search for messages only in channels
+                  default: false
+                  type: boolean
                 offset_date:
                   description: The date of the message starting from which the results should be fetched. Use 0 or any date in the future to get results from the last message.
                   type: integer
@@ -1526,6 +1475,10 @@ paths:
                 query:
                   description: Query to search for.
                   type: string
+                only_in_channels:
+                  description: Search for messages only in channels
+                  default: false
+                  type: boolean
                 offset_date:
                   description: The date of the message starting from which the results should be fetched. Use 0 or any date in the future to get results from the last message.
                   type: integer
@@ -9260,6 +9213,9 @@ components:
         is_scam:
           description: '*Optional*. Is the user reported for scam, clients show a warning to the user.'
           type: boolean
+        is_fake:
+          description: '*Optional*. Is the user marked as fake by Telegram.'
+          type: boolean
       required:
         - id
         - is_bot
@@ -9327,6 +9283,9 @@ components:
           type: boolean
         is_scam:
           description: '*Optional*. Is the chat reported for scam, clients show a warning to the user.'
+          type: boolean
+        is_fake:
+          description: '*Optional*. Is the chat marked as fake by Telegram.'
           type: boolean
         distance:
           description: '*Optional*. Distance to the chat location in meters. Returned only in `getChatsNearby`.'
