@@ -347,8 +347,17 @@ class Client final : public WebhookActor::Callback {
 
   class TdOnGetMessagePropertiesCallback;
   class TdOnGenericCallback;
-  
+
   class TdOnGetStatisticalGraphCallback;
+
+  class JsonChatStatisticsInviterInfo;
+  class JsonChatStatisticsAdministratorActionsInfo;
+  class JsonChatStatisticsMessageSenderInfo;
+  class JsonChatStatisticsInteractionInfo;
+  class JsonStatisticalValue;
+  class JsonDateRange;
+  class JsonChatStatistics;
+  class TdOnGetChatStatisticsCallback;
 
   void get_message_properties_and_data(int64 chat_id, int64 message_id, PromisedQueryPtr query);
   void fetch_message_additional_data(int64 chat_id, int64 message_id, object_ptr<td_api::messageProperties> properties,
@@ -973,6 +982,7 @@ class Client final : public WebhookActor::Callback {
   // my custum methods
   td::Status process_get_message_query(PromisedQueryPtr &query);
   td::Status process_get_statistical_graph_query(PromisedQueryPtr &query);
+  td::Status process_get_chat_statistics_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);

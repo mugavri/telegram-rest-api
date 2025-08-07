@@ -415,6 +415,7 @@ bool Client::init_methods() {
   // my custum methods
   methods_.emplace("getmessage", &Client::process_get_message_query);
   methods_.emplace("getstatisticalgraph", &Client::process_get_statistical_graph_query);
+  methods_.emplace("getchatstatistics", &Client::process_get_chat_statistics_query);
 
   return true;
 }
@@ -5899,6 +5900,208 @@ class Client::JsonMessageFullData final : public td::Jsonable {
   Client *client_;
 };
 
+class Client::JsonChatStatisticsInviterInfo final : public td::Jsonable {
+ public:
+  JsonChatStatisticsInviterInfo(const td_api::chatStatisticsInviterInfo *info) : info_(info) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("user_id", info_->user_id_);
+    object("added_member_count_", td::JsonInt(info_->added_member_count_));
+  }
+
+ private:
+  const td_api::chatStatisticsInviterInfo *info_;
+};
+
+class Client::JsonChatStatisticsAdministratorActionsInfo final : public td::Jsonable {
+ public:
+  JsonChatStatisticsAdministratorActionsInfo(const td_api::chatStatisticsAdministratorActionsInfo *info) : info_(info) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("user_id", info_->user_id_);
+    object("deleted_message_count", td::JsonInt(info_->deleted_message_count_));
+    object("banned_user_count", td::JsonInt(info_->banned_user_count_));
+    object("restricted_user_count_", td::JsonInt(info_->restricted_user_count_));
+  }
+
+ private:
+  const td_api::chatStatisticsAdministratorActionsInfo *info_;
+};
+
+class Client::JsonChatStatisticsMessageSenderInfo final : public td::Jsonable {
+ public:
+  JsonChatStatisticsMessageSenderInfo(const td_api::chatStatisticsMessageSenderInfo *info) : info_(info) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("user_id", info_->user_id_);
+    object("sent_message_count", info_->sent_message_count_);
+    object("average_character_count", info_->average_character_count_);
+  }
+
+ private:
+  const td_api::chatStatisticsMessageSenderInfo *info_;
+};
+
+class Client::JsonChatStatisticsInteractionInfo final : public td::Jsonable {
+ public:
+  JsonChatStatisticsInteractionInfo(const td_api::chatStatisticsInteractionInfo *info) : info_(info) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    switch (info_->object_type_->get_id()) {
+      case td_api::chatStatisticsObjectTypeMessage::ID: {
+        object("type", "message");
+        auto message_type = static_cast<const td_api::chatStatisticsObjectTypeMessage *>(info_->object_type_.get());
+        object("message_id", message_type->message_id_);
+        break;
+      }
+      case td_api::chatStatisticsObjectTypeStory::ID: {
+        object("type", "story");
+        auto story_type = static_cast<const td_api::chatStatisticsObjectTypeStory *>(info_->object_type_.get());
+        object("story_id", story_type->story_id_);
+        break;
+      }
+      default: {
+        object("type", "unknown");
+        break;
+      }
+    }
+    object("view_count", td::JsonInt(info_->view_count_));
+    object("forward_count", td::JsonInt(info_->forward_count_));
+    object("reaction_count", td::JsonInt(info_->reaction_count_));
+  }
+
+ private:
+  const td_api::chatStatisticsInteractionInfo *info_;
+};
+
+class Client::JsonStatisticalValue final : public td::Jsonable {
+ public:
+  JsonStatisticalValue(const td_api::statisticalValue *value) : value_(value) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("value", value_->value_);
+    object("previous_value", value_->previous_value_);
+    object("growth_rate_percentage", value_->growth_rate_percentage_);
+  }
+
+ private:
+  const td_api::statisticalValue *value_;
+};
+
+class Client::JsonDateRange final : public td::Jsonable {
+ public:
+  JsonDateRange(const td_api::dateRange *range) : range_(range) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("from_date", td::JsonInt(range_->start_date_));
+    object("to_date", td::JsonInt(range_->end_date_));
+  }
+
+ private:
+  const td_api::dateRange *range_;
+};
+
+class Client::JsonChatStatistics final : public td::Jsonable {
+ public:
+  explicit JsonChatStatistics(const td_api::ChatStatistics *statistics) : statistics_(statistics) {
+    CHECK(statistics_ != nullptr);
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    switch (statistics_->get_id()) {
+      case td_api::chatStatisticsChannel::ID: {
+        auto stats = static_cast<const td_api::chatStatisticsChannel *>(statistics_);
+
+        object("type", "channel_stats");
+        object("period", JsonDateRange(stats->period_.get()));
+        object("member_count", JsonStatisticalValue(stats->member_count_.get()));
+        object("mean_message_view_count", JsonStatisticalValue(stats->mean_message_view_count_.get()));
+        object("mean_message_share_count", JsonStatisticalValue(stats->mean_message_share_count_.get()));
+        object("mean_message_reaction_count", JsonStatisticalValue(stats->mean_message_reaction_count_.get()));
+        object("mean_story_view_count", JsonStatisticalValue(stats->mean_story_view_count_.get()));
+        object("mean_story_share_count", JsonStatisticalValue(stats->mean_story_share_count_.get()));
+        object("mean_story_reaction_count", JsonStatisticalValue(stats->mean_story_reaction_count_.get()));
+
+        object("enabled_notifications_percentage", td::to_string(stats->enabled_notifications_percentage_));
+
+        object("member_count_graph", JsonStatisticalGraph(stats->member_count_graph_.get()));
+        object("join_graph", JsonStatisticalGraph(stats->join_graph_.get()));
+        object("mute_graph", JsonStatisticalGraph(stats->mute_graph_.get()));
+        object("view_count_by_hour_graph", JsonStatisticalGraph(stats->view_count_by_hour_graph_.get()));
+        object("view_count_by_source_graph", JsonStatisticalGraph(stats->view_count_by_source_graph_.get()));
+        object("join_by_source_graph", JsonStatisticalGraph(stats->join_by_source_graph_.get()));
+        object("language_graph", JsonStatisticalGraph(stats->language_graph_.get()));
+        object("message_interaction_graph", JsonStatisticalGraph(stats->message_interaction_graph_.get()));
+        object("message_reaction_graph", JsonStatisticalGraph(stats->message_reaction_graph_.get()));
+        object("story_interaction_graph", JsonStatisticalGraph(stats->story_interaction_graph_.get()));
+        object("story_reaction_graph", JsonStatisticalGraph(stats->story_reaction_graph_.get()));
+        object("instant_view_interaction_graph", JsonStatisticalGraph(stats->instant_view_interaction_graph_.get()));
+
+        object("recent_interactions", td::json_array(stats->recent_interactions_, [](const auto &info) {
+                 return JsonChatStatisticsInteractionInfo(info.get());
+               }));
+        break;
+      }
+      case td_api::chatStatisticsSupergroup::ID: {
+        auto stats = static_cast<const td_api::chatStatisticsSupergroup *>(statistics_);
+        object("type", "supergroup_stats");
+
+        object("period", JsonDateRange(stats->period_.get()));
+
+        object("member_count", JsonStatisticalValue(stats->member_count_.get()));
+        object("message_count", JsonStatisticalValue(stats->message_count_.get()));
+        object("viewer_count", JsonStatisticalValue(stats->viewer_count_.get()));
+        object("sender_count", JsonStatisticalValue(stats->sender_count_.get()));
+        object("member_count_graph", JsonStatisticalGraph(stats->member_count_graph_.get()));
+        object("join_graph", JsonStatisticalGraph(stats->join_graph_.get()));
+        object("join_by_source_graph", JsonStatisticalGraph(stats->join_by_source_graph_.get()));
+        object("language_graph", JsonStatisticalGraph(stats->language_graph_.get()));
+        object("message_content_graph", JsonStatisticalGraph(stats->message_content_graph_.get()));
+        object("action_graph", JsonStatisticalGraph(stats->action_graph_.get()));
+        object("day_graph", JsonStatisticalGraph(stats->day_graph_.get()));
+        object("week_graph", JsonStatisticalGraph(stats->week_graph_.get()));
+
+        object("top_senders", td::json_array(stats->top_senders_, [](const auto &sender) {
+                 return JsonChatStatisticsMessageSenderInfo(sender.get());
+               }));
+        object("top_administrators", td::json_array(stats->top_administrators_, [](const auto &administrator) {
+                 return JsonChatStatisticsAdministratorActionsInfo(administrator.get());
+               }));
+        object("top_inviters", td::json_array(stats->top_inviters_, [](const auto &inviter) {
+                 return JsonChatStatisticsInviterInfo(inviter.get());
+               }));
+        break;
+      }
+      default: {
+        object("type", "unknown_stats");
+        break;
+      }
+    }
+  }
+
+ private:
+  const td_api::ChatStatistics *statistics_;
+};
+
 // and
 
 class Client::TdOnOkCallback final : public TdQueryCallback {
@@ -7987,6 +8190,25 @@ class Client::TdOnGetStatisticalGraphCallback final : public TdQueryCallback {
 
     auto graph = move_object_as<td_api::StatisticalGraph>(result);
     answer_query(JsonStatisticalGraph(graph.get()), std::move(query_));
+  }
+
+ private:
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetChatStatisticsCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnGetChatStatisticsCallback(PromisedQueryPtr query) : query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto statistics = move_object_as<td_api::ChatStatistics>(result);
+    answer_query(JsonChatStatistics(statistics.get()), std::move(query_));
   }
 
  private:
@@ -16035,6 +16257,22 @@ td::Status Client::process_get_statistical_graph_query(PromisedQueryPtr &query) 
 
   send_request(make_object<td_api::getStatisticalGraph>(chat_id, token.str(), x),
                td::make_unique<TdOnGetStatisticalGraphCallback>(std::move(query)));
+
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_chat_statistics_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+  auto chat_id = query->arg("chat_id");
+  bool is_dark = to_bool(query->arg("is_dark"));
+
+  check_chat(
+      chat_id, AccessRights::Write, std::move(query),
+      [this, is_dark](int64 chat_id, PromisedQueryPtr query) mutable {
+        send_request(make_object<td_api::getChatStatistics>(chat_id, is_dark),
+                     td::make_unique<TdOnGetChatStatisticsCallback>(std::move(query)));
+      },
+      true);
 
   return td::Status::OK();
 }
