@@ -15895,8 +15895,6 @@ void Client::get_message_properties_and_data(int64 chat_id, int64 message_id, Pr
 // then get more message data
 void Client::fetch_message_additional_data(int64 chat_id, int64 message_id,
                                            object_ptr<td_api::messageProperties> properties, PromisedQueryPtr query) {
-  LOG(ERROR) << "tttllop fetch_message_additional_data start";
-
   auto message_data = std::make_shared<MessageFullData>();
   message_data->properties = std::move(properties);
   message_data->chat_id = chat_id;
