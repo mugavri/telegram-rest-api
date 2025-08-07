@@ -3514,14 +3514,21 @@ class Client::JsonMessageInteractionInfo : public td::Jsonable {
     auto object = scope->enter_object();
 
     int64 reactions_count = 0;
+    int64 replies_count = 0;
 
-    for (auto &reaction : info_->reactions_.get()->reactions_) {
-      const td_api::messageReaction *reaction_ptr = reaction.get();
-      reactions_count += reaction_ptr->total_count_;
+    if (info_->reactions_ != nullptr) {
+      for (auto &reaction : info_->reactions_.get()->reactions_) {
+        const td_api::messageReaction *reaction_ptr = reaction.get();
+        reactions_count += reaction_ptr->total_count_;
+      }
     }
 
-    object("count", JsonMessageInteractionCount(info_->view_count_, info_->forward_count_,
-                                                info_->reply_info_->reply_count_, reactions_count));
+    if (info_->reply_info_ != nullptr) {
+      replies_count = info_->reply_info_->reply_count_;
+    }
+
+    object("count",
+           JsonMessageInteractionCount(info_->view_count_, info_->forward_count_, replies_count, reactions_count));
 
     // object("replies_info", JsonMessageReplyInfo(info_->reply_info_.get()));
 
