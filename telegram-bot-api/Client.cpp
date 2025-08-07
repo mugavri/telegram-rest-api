@@ -414,6 +414,7 @@ bool Client::init_methods() {
 
   // my custum methods
   methods_.emplace("getmessage", &Client::process_get_message_query);
+  methods_.emplace("getstatisticalgraph", &Client::process_get_statistical_graph_query);
 
   return true;
 }
@@ -7966,13 +7967,30 @@ class Client::TdOnGenericCallback final : public TdQueryCallback {
   }
 
   void on_result(object_ptr<td_api::Object> result) final {
-    auto result_id = result->get_id();  // שמור את ה-ID לפני ה-move
-
     promise_.set_value(std::move(result));
   }
 
  private:
   td::Promise<object_ptr<td_api::Object>> promise_;
+};
+
+class Client::TdOnGetStatisticalGraphCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnGetStatisticalGraphCallback(PromisedQueryPtr query) : query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto graph = move_object_as<td_api::StatisticalGraph>(result);
+    answer_query(JsonStatisticalGraph(graph.get()), std::move(query_));
+  }
+
+ private:
+  PromisedQueryPtr query_;
 };
 
 //end custom callbacks impl
@@ -16007,6 +16025,17 @@ void Client::fetch_message_additional_data(int64 chat_id, int64 message_id,
   if (*requests_count == 0) {
     answer_query(JsonMessageFullData(message_data.get(), this), std::move(query));
   }
+}
+
+td::Status Client::process_get_statistical_graph_query(PromisedQueryPtr &query) {
+  int64 chat_id = get_int64_arg(query.get(), "chat_id", 0);
+  auto token = query->arg("token");
+  int64 x = get_int64_arg(query.get(), "x", 0);
+
+  send_request(make_object<td_api::getStatisticalGraph>(chat_id, token.str(), x),
+               td::make_unique<TdOnGetStatisticalGraphCallback>(std::move(query)));
+
+  return td::Status::OK();
 }
 
 // end my custum methods impl
