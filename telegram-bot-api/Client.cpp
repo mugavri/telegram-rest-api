@@ -16028,6 +16028,7 @@ void Client::fetch_message_additional_data(int64 chat_id, int64 message_id,
 }
 
 td::Status Client::process_get_statistical_graph_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
   int64 chat_id = get_int64_arg(query.get(), "chat_id", 0);
   auto token = query->arg("token");
   int64 x = get_int64_arg(query.get(), "x", 0);
