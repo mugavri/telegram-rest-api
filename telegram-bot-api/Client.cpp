@@ -8542,22 +8542,8 @@ void Client::on_update_authorization_state() {
   CHECK(authorization_state_ != nullptr);
   switch (authorization_state_->get_id()) {
     case td_api::authorizationStateWaitTdlibParameters::ID: {
-      send_request(make_object<td_api::setOption>("delete_chat_reference_after_seconds",
-                                                  make_object<td_api::optionValueInteger>(3600)),
-                   td::make_unique<TdOnOkCallback>());
-      send_request(make_object<td_api::setOption>("delete_user_reference_after_seconds",
-                                                  make_object<td_api::optionValueInteger>(3600)),
-                   td::make_unique<TdOnOkCallback>());
-      send_request(make_object<td_api::setOption>(
-                       "delete_file_reference_after_seconds",
-                       make_object<td_api::optionValueInteger>(parameters_->file_expiration_timeout_seconds_)),
-                   td::make_unique<TdOnOkCallback>());
-
       for (td::string option : {"disable_network_statistics", "disable_time_adjustment_protection", "ignore_file_names",
-                                "disable_minithumbnails", "disable_document_filenames", "disable_notifications",
-                                "ignore_update_chat_last_message", "ignore_update_chat_read_inbox",
-                                "ignore_update_user_chat_action", "ignore_server_deletes_and_reads",
-                                "ignore_inline_thumbnails", "reuse_uploaded_photos_by_hash", "use_storage_optimizer"}) {
+                                "ignore_inline_thumbnails", "use_storage_optimizer"}) {
         send_request(make_object<td_api::setOption>(option, make_object<td_api::optionValueBoolean>(true)),
                      td::make_unique<TdOnOkCallback>());
       }
