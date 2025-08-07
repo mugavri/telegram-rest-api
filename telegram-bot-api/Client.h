@@ -332,6 +332,26 @@ class Client final : public WebhookActor::Callback {
   class TdOnGetCallbackQueryAnswerCallback;
   class TdOnGetProxiesQueryCallback;
   class TdOnAddProxyQueryCallback;
+
+  struct MessageFullData;
+
+  // Custom callbacks for message properties
+  class JsonMessageFullData;
+  class JsonMessageStatistics;
+  class JsonStatisticalGraph;
+  class JsonPublicForwards;
+  class JsonPublicForward;
+  class JsonMessageViewer;
+  class JsonAvailableReactions;
+  class JsonAvailableReaction;
+
+  class TdOnGetMessagePropertiesCallback;
+  class TdOnGenericCallback;
+
+  void get_message_properties_and_data(int64 chat_id, int64 message_id, PromisedQueryPtr query);
+  void fetch_message_additional_data(int64 chat_id, int64 message_id, object_ptr<td_api::messageProperties> properties,
+                                     PromisedQueryPtr query);
+
   //end custom callbacks
 
   void on_get_reply_message(int64 chat_id, object_ptr<td_api::message> reply_to_message);
@@ -947,6 +967,9 @@ class Client final : public WebhookActor::Callback {
   td::Status process_delete_chat_history_query(PromisedQueryPtr &query);
   td::Status process_get_scheduled_messages_query(PromisedQueryPtr &query);
   td::Status process_edit_message_scheduling_query(PromisedQueryPtr &query);
+
+  // my custum methods
+  td::Status process_get_message_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);

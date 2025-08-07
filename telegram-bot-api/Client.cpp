@@ -412,6 +412,9 @@ bool Client::init_methods() {
   methods_.emplace("getscheduledmessages", &Client::process_get_scheduled_messages_query);
   methods_.emplace("editmessagescheduling", &Client::process_edit_message_scheduling_query);
 
+  // my custum methods
+  methods_.emplace("getmessage", &Client::process_get_message_query);
+
   return true;
 }
 
@@ -419,10 +422,6 @@ bool Client::is_local_method(td::Slice method) {
   return method == "close" || method == "logout" || method == "getme" || method == "getupdates" ||
          method == "setwebhook" || method == "deletewebhook" || method == "getwebhookinfo";
 }
-
-// start
-
-// and
 
 class Client::JsonEmptyObject final : public td::Jsonable {
  public:
@@ -5616,6 +5615,291 @@ class Client::JsonProxiesArray : public td::Jsonable {
 
 //end custom Json objects impl
 
+// start
+
+// מבנה נתונים לשמירת כל המידע על המסר
+struct Client::MessageFullData {
+  object_ptr<td_api::messageProperties> properties;
+  object_ptr<td_api::messageStatistics> statistics;
+  object_ptr<td_api::publicForwards> public_forwards;
+  object_ptr<td_api::messageThreadInfo> thread_info;
+  object_ptr<td_api::messages> thread_history;
+  object_ptr<td_api::messageViewers> viewers;
+  object_ptr<td_api::availableReactions> available_reactions;
+  object_ptr<td_api::addedReactions> added_reactions;
+
+  int64 chat_id;
+  int64 message_id;
+};
+
+class Client::JsonAvailableReaction final : public td::Jsonable {
+ public:
+  JsonAvailableReaction(const td_api::availableReaction *reaction) : reaction_(reaction) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("type", JsonReactionType(reaction_->type_.get()));
+    object("needs_premium", td::JsonBool(reaction_->needs_premium_));
+  }
+
+ private:
+  const td_api::availableReaction *reaction_;
+};
+
+class Client::JsonAvailableReactions final : public td::Jsonable {
+ public:
+  JsonAvailableReactions(const td_api::availableReactions *reactions) : reactions_(reactions) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("top_reactions", td::json_array(reactions_->top_reactions_,
+                                           [](const auto &reaction) { return JsonAvailableReaction(reaction.get()); }));
+    object("recent_reactions", td::json_array(reactions_->recent_reactions_, [](const auto &reaction) {
+             return JsonAvailableReaction(reaction.get());
+           }));
+    object("popular_reactions", td::json_array(reactions_->popular_reactions_, [](const auto &reaction) {
+             return JsonAvailableReaction(reaction.get());
+           }));
+    object("allow_custom_emoji", td::JsonBool(reactions_->allow_custom_emoji_));
+    object("are_tags", td::JsonBool(reactions_->are_tags_));
+  }
+
+ private:
+  const td_api::availableReactions *reactions_;
+};
+
+class Client::JsonMessageViewer final : public td::Jsonable {
+ public:
+  JsonMessageViewer(const td_api::messageViewer *viewer, Client *client) : viewer_(viewer), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    // object("user", JsonUser(viewer_->user_id_, nullptr));
+    object("user_id", viewer_->user_id_);
+    object("date", viewer_->view_date_);
+  }
+
+ private:
+  const td_api::messageViewer *viewer_;
+  Client *client_;
+};
+
+class Client::JsonPublicForward final : public td::Jsonable {
+ public:
+  JsonPublicForward(const td_api::PublicForward *forward, Client *client) : forward_(forward), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    switch (forward_->get_id()) {
+      case td_api::publicForwardMessage::ID: {
+        auto data = static_cast<const td_api::publicForwardMessage *>(forward_);
+        object("type", "message");
+
+        // auto *mutable_data = const_cast<td_api::publicForwardMessage *>(data);
+
+        // auto full_message_id = client_->add_message(std::move(mutable_data->message_), true);
+
+        // const MessageInfo *message_info =
+        //     client_->get_message(full_message_id.chat_id, full_message_id.message_id, client_);
+
+        // object("message", JsonMessage(message_info, false, "get publicForwardMessage", client_));
+
+        object("message_id", as_client_message_id_unchecked(data->message_->id_));
+        object("chat_id", data->message_->chat_id_);
+        break;
+      }
+      case td_api::publicForwardStory::ID: {
+        auto data = static_cast<const td_api::publicForwardStory *>(forward_);
+        object("type", "story");
+        object("story_id", data->story_->id_);
+        break;
+      }
+      default:
+        UNREACHABLE();
+    }
+  }
+
+ private:
+  const td_api::PublicForward *forward_;
+  Client *client_;
+};
+
+class Client::JsonPublicForwards final : public td::Jsonable {
+ public:
+  JsonPublicForwards(const td_api::publicForwards *forwards, Client *client) : forwards_(forwards), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("total_count", td::JsonInt(forwards_->total_count_));
+    object("next_offset", forwards_->next_offset_);
+    object("forwards", td::json_array(forwards_->forwards_, [client = client_](const auto &forward) {
+             return JsonPublicForward(forward.get(), client);
+           }));
+  }
+
+ private:
+  const td_api::publicForwards *forwards_;
+  Client *client_;
+};
+
+class Client::JsonStatisticalGraph final : public td::Jsonable {
+ public:
+  JsonStatisticalGraph(const td_api::StatisticalGraph *graph) : graph_(graph) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    switch (graph_->get_id()) {
+      case td_api::statisticalGraphData::ID: {
+        auto data = static_cast<const td_api::statisticalGraphData *>(graph_);
+        object("type", "graph_data");
+        object("data", data->json_data_);
+        object("zoom_token", data->zoom_token_);
+        break;
+      }
+      case td_api::statisticalGraphError::ID: {
+        auto error = static_cast<const td_api::statisticalGraphError *>(graph_);
+        object("type", "graph_error");
+        object("error", error->error_message_);
+        break;
+      }
+      case td_api::statisticalGraphAsync::ID: {
+        auto async = static_cast<const td_api::statisticalGraphAsync *>(graph_);
+        object("type", "graph_async");
+        object("token", async->token_);
+        break;
+      }
+      default:
+        UNREACHABLE();
+    }
+  }
+
+ private:
+  const td_api::StatisticalGraph *graph_;
+};
+
+class Client::JsonMessageStatistics final : public td::Jsonable {
+ public:
+  JsonMessageStatistics(const td_api::messageStatistics *statistics) : statistics_(statistics) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    if (statistics_ == nullptr) {
+      object("message_statistics", "null");
+      return;
+    }
+
+    object("message_interaction_graph", JsonStatisticalGraph(statistics_->message_interaction_graph_.get()));
+    object("message_reaction_graph", JsonStatisticalGraph(statistics_->message_reaction_graph_.get()));
+  }
+
+ private:
+  const td_api::messageStatistics *statistics_;
+};
+
+// JSON serializer עבור התוצאה המלאה
+class Client::JsonMessageFullData final : public td::Jsonable {
+ public:
+  JsonMessageFullData(const MessageFullData *data, Client *client) : data_(data), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+
+    object("chat_id", data_->chat_id);
+    object("message_id", Client::as_client_message_id(data_->message_id));
+
+    auto message = client_->get_message(data_->chat_id, data_->message_id, client_);
+
+    object("message", JsonMessage(message, false, "get message info", client_));
+
+    if (data_->properties) {
+      object("properties", td::json_object([&](auto &props) {
+               props("can_add_tasks", td::JsonBool(data_->properties->can_add_tasks_));
+               props("can_be_copied", td::JsonBool(data_->properties->can_be_copied_));
+               props("can_be_copied_to_secret_chat", td::JsonBool(data_->properties->can_be_copied_to_secret_chat_));
+               props("can_be_deleted_only_for_self", td::JsonBool(data_->properties->can_be_deleted_only_for_self_));
+               props("can_be_deleted_for_all_users", td::JsonBool(data_->properties->can_be_deleted_for_all_users_));
+               props("can_be_edited", td::JsonBool(data_->properties->can_be_edited_));
+               props("can_be_forwarded", td::JsonBool(data_->properties->can_be_forwarded_));
+               props("can_be_paid", td::JsonBool(data_->properties->can_be_paid_));
+               props("can_be_pinned", td::JsonBool(data_->properties->can_be_pinned_));
+               props("can_be_replied", td::JsonBool(data_->properties->can_be_replied_));
+               props("can_be_replied_in_another_chat",
+                     td::JsonBool(data_->properties->can_be_replied_in_another_chat_));
+               props("can_be_saved", td::JsonBool(data_->properties->can_be_saved_));
+               props("can_be_shared_in_story", td::JsonBool(data_->properties->can_be_shared_in_story_));
+               props("can_edit_media", td::JsonBool(data_->properties->can_edit_media_));
+               props("can_edit_scheduling_state", td::JsonBool(data_->properties->can_edit_scheduling_state_));
+               props("can_get_author", td::JsonBool(data_->properties->can_get_author_));
+               props("can_get_embedding_code", td::JsonBool(data_->properties->can_get_embedding_code_));
+               props("can_get_link", td::JsonBool(data_->properties->can_get_link_));
+               props("can_get_media_timestamp_links", td::JsonBool(data_->properties->can_get_media_timestamp_links_));
+               props("can_get_message_thread", td::JsonBool(data_->properties->can_get_message_thread_));
+               props("can_get_read_date", td::JsonBool(data_->properties->can_get_read_date_));
+               props("can_get_statistics", td::JsonBool(data_->properties->can_get_statistics_));
+               props("can_get_video_advertisements", td::JsonBool(data_->properties->can_get_video_advertisements_));
+               props("can_get_viewers", td::JsonBool(data_->properties->can_get_viewers_));
+               props("can_mark_tasks_as_done", td::JsonBool(data_->properties->can_mark_tasks_as_done_));
+               props("can_recognize_speech", td::JsonBool(data_->properties->can_recognize_speech_));
+               props("can_report_chat", td::JsonBool(data_->properties->can_report_chat_));
+               props("can_report_reactions", td::JsonBool(data_->properties->can_report_reactions_));
+               props("can_report_supergroup_spam", td::JsonBool(data_->properties->can_report_supergroup_spam_));
+               props("can_set_fact_check", td::JsonBool(data_->properties->can_set_fact_check_));
+               props("need_show_statistics", td::JsonBool(data_->properties->need_show_statistics_));
+             }));
+    }
+
+    if (data_->statistics) {
+      object("statistics", JsonMessageStatistics(data_->statistics.get()));
+    }
+
+    if (data_->public_forwards) {
+      object("public_forwards", JsonPublicForwards(data_->public_forwards.get(), client_));
+    }
+
+    if (data_->thread_info) {
+      // object("thread_info", JsonMessageThreadInfo(data_->thread_info.get(), client_));
+      object("thread_info", "1");
+    }
+
+    if (data_->thread_history) {
+      // object("thread_messages", JsonMessagesArray(data_->thread_history->messages_, client_));
+      object("thread_messages", "1");
+    }
+
+    if (data_->viewers) {
+      // object("viewers", JsonMessageViewers(data_->viewers.get(), client_));
+      // object("viewers", "1");
+
+      object("viewers", td::json_array(data_->viewers->viewers_, [client = client_](const auto &viewer) {
+               return JsonMessageViewer(viewer.get(), client);
+             }));
+    }
+
+    if (data_->available_reactions) {
+      object("available_reactions", JsonAvailableReactions(data_->available_reactions.get()));
+    }
+  }
+
+ private:
+  const Client::MessageFullData *data_;
+  Client *client_;
+};
+
+// and
+
 class Client::TdOnOkCallback final : public TdQueryCallback {
  public:
   void on_result(object_ptr<td_api::Object> result) final {
@@ -7645,6 +7929,50 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
 
  private:
   PromisedQueryPtr query_;
+};
+
+// Callback for getMessageProperties
+class Client::TdOnGetMessagePropertiesCallback final : public TdQueryCallback {
+ public:
+  TdOnGetMessagePropertiesCallback(Client *client, int64 chat_id, int64 message_id, PromisedQueryPtr query)
+      : client_(client), chat_id_(chat_id), message_id_(message_id), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto properties = move_object_as<td_api::messageProperties>(result);
+
+    if (properties == nullptr) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    client_->fetch_message_additional_data(chat_id_, message_id_, std::move(properties), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  int64 chat_id_;
+  int64 message_id_;
+  PromisedQueryPtr query_;
+};
+
+// Callback for get full message
+class Client::TdOnGenericCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnGenericCallback(td::Promise<object_ptr<td_api::Object>> promise) : promise_(std::move(promise)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    auto result_id = result->get_id();  // שמור את ה-ID לפני ה-move
+
+    promise_.set_value(std::move(result));
+  }
+
+ private:
+  td::Promise<object_ptr<td_api::Object>> promise_;
 };
 
 //end custom callbacks impl
@@ -15014,7 +15342,8 @@ td::Status Client::process_answer_custom_query_query(PromisedQueryPtr &query) {
 td::Status Client::process_get_updates_query(PromisedQueryPtr &query) {
   if (!webhook_url_.empty() || webhook_set_query_ || active_webhook_set_query_) {
     fail_query_conflict(
-        "Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook first",
+        "Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook "
+        "first",
         std::move(query));
     return td::Status::OK();
   }
@@ -15543,6 +15872,147 @@ td::Status Client::process_edit_message_scheduling_query(PromisedQueryPtr &query
 }
 
 //end custom user methods impl
+
+// start my custum methods impl
+td::Status Client::process_get_message_query(PromisedQueryPtr &query) {
+  auto chat_id = query->arg("chat_id");
+  auto message_id = get_message_id(query.get(), "message_id");
+
+  check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
+                [this](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+                  get_message_properties_and_data(chat_id, message_id, std::move(query));
+                });
+
+  return td::Status::OK();
+}
+
+void Client::get_message_properties_and_data(int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+  // get first message properties
+  send_request(make_object<td_api::getMessageProperties>(chat_id, message_id),
+               td::make_unique<TdOnGetMessagePropertiesCallback>(this, chat_id, message_id, std::move(query)));
+}
+
+// then get more message data
+void Client::fetch_message_additional_data(int64 chat_id, int64 message_id,
+                                           object_ptr<td_api::messageProperties> properties, PromisedQueryPtr query) {
+  LOG(ERROR) << "tttllop fetch_message_additional_data start";
+
+  auto message_data = std::make_shared<MessageFullData>();
+  message_data->properties = std::move(properties);
+  message_data->chat_id = chat_id;
+  message_data->message_id = message_id;
+
+  auto requests_count = std::make_shared<int>(0);
+
+  auto shared_query = std::make_shared<PromisedQueryPtr>(std::move(query));
+
+  if (message_data->properties->can_get_statistics_) {
+    (*requests_count)++;
+    auto statistics_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageStatistics::ID) {
+            message_data->statistics = move_object_as<td_api::messageStatistics>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageStatistics>(chat_id, message_id, false),
+                 td::make_unique<TdOnGenericCallback>(std::move(statistics_promise)));
+
+    (*requests_count)++;
+    auto public_forwards_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::publicForwards::ID) {
+            message_data->public_forwards = move_object_as<td_api::publicForwards>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessagePublicForwards>(chat_id, message_id, "", 100),
+                 td::make_unique<TdOnGenericCallback>(std::move(public_forwards_promise)));
+  }
+
+  if (message_data->properties->can_get_message_thread_) {
+    (*requests_count)++;
+    auto thread_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageThreadInfo::ID) {
+            message_data->thread_info = move_object_as<td_api::messageThreadInfo>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageThread>(chat_id, message_id),
+                 td::make_unique<TdOnGenericCallback>(std::move(thread_promise)));
+
+    (*requests_count)++;
+    auto history_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messages::ID) {
+            message_data->thread_history = move_object_as<td_api::messages>(result);
+          }
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageThreadHistory>(chat_id, message_id, 0, 0, 50),
+                 td::make_unique<TdOnGenericCallback>(std::move(history_promise)));
+  }
+
+  if (message_data->properties->can_get_viewers_) {
+    (*requests_count)++;
+
+    auto viewers_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageViewers::ID) {
+            message_data->viewers = move_object_as<td_api::messageViewers>(result);
+          }
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageViewers>(chat_id, message_id),
+                 td::make_unique<TdOnGenericCallback>(std::move(viewers_promise)));
+  }
+
+  // (*requests_count)++;
+  // auto reactions_promise = td::PromiseCreator::lambda(
+  //     [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+  //       if (result->get_id() == td_api::availableReactions::ID) {
+  //         message_data->available_reactions = move_object_as<td_api::availableReactions>(result);
+  //       }
+  //       int remaining = --(*requests_count);
+  //       if (remaining == 0) {
+  //         answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+  //       }
+  //     });
+
+  // send_request(make_object<td_api::getMessageAvailableReactions>(chat_id, message_id, 0),
+  //              td::make_unique<TdOnGenericCallback>(std::move(reactions_promise)));
+
+  if (*requests_count == 0) {
+    answer_query(JsonMessageFullData(message_data.get(), this), std::move(query));
+  }
+}
+
+// end my custum methods impl
+
 //start custom auth methods impl
 
 void Client::process_auth_phone_number_query(PromisedQueryPtr &query) {
