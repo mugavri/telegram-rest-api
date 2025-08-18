@@ -16486,6 +16486,159 @@ td::Status Client::process_edit_message_scheduling_query(PromisedQueryPtr &query
 }
 
 //end custom user methods impl
+
+// start my custum methods impl
+td::Status Client::process_get_message_query(PromisedQueryPtr &query) {
+  auto chat_id = query->arg("chat_id");
+  auto message_id = get_message_id(query.get(), "message_id");
+
+  check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
+                [this](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+                  get_message_properties_and_data(chat_id, message_id, std::move(query));
+                });
+
+  return td::Status::OK();
+}
+
+void Client::get_message_properties_and_data(int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+  // get first message properties
+  send_request(make_object<td_api::getMessageProperties>(chat_id, message_id),
+               td::make_unique<TdOnGetMessagePropertiesCallback>(this, chat_id, message_id, std::move(query)));
+}
+
+// then get more message data
+void Client::fetch_message_additional_data(int64 chat_id, int64 message_id,
+                                           object_ptr<td_api::messageProperties> properties, PromisedQueryPtr query) {
+  auto message_data = std::make_shared<MessageFullData>();
+  message_data->properties = std::move(properties);
+  message_data->chat_id = chat_id;
+  message_data->message_id = message_id;
+
+  auto requests_count = std::make_shared<int>(0);
+
+  auto shared_query = std::make_shared<PromisedQueryPtr>(std::move(query));
+
+  if (message_data->properties->can_get_statistics_) {
+    (*requests_count)++;
+    auto statistics_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageStatistics::ID) {
+            message_data->statistics = move_object_as<td_api::messageStatistics>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageStatistics>(chat_id, message_id, false),
+                 td::make_unique<TdOnGenericCallback>(std::move(statistics_promise)));
+
+    (*requests_count)++;
+    auto public_forwards_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::publicForwards::ID) {
+            message_data->public_forwards = move_object_as<td_api::publicForwards>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessagePublicForwards>(chat_id, message_id, "", 100),
+                 td::make_unique<TdOnGenericCallback>(std::move(public_forwards_promise)));
+  }
+
+  if (message_data->properties->can_get_message_thread_) {
+    (*requests_count)++;
+    auto thread_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageThreadInfo::ID) {
+            message_data->thread_info = move_object_as<td_api::messageThreadInfo>(result);
+          }
+
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageThread>(chat_id, message_id),
+                 td::make_unique<TdOnGenericCallback>(std::move(thread_promise)));
+
+    (*requests_count)++;
+    auto history_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messages::ID) {
+            message_data->thread_history = move_object_as<td_api::messages>(result);
+          }
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageThreadHistory>(chat_id, message_id, 0, 0, 50),
+                 td::make_unique<TdOnGenericCallback>(std::move(history_promise)));
+  }
+
+  if (message_data->properties->can_get_viewers_) {
+    (*requests_count)++;
+
+    auto viewers_promise = td::PromiseCreator::lambda(
+        [this, message_data, requests_count, shared_query](object_ptr<td_api::Object> result) mutable {
+          if (result->get_id() == td_api::messageViewers::ID) {
+            message_data->viewers = move_object_as<td_api::messageViewers>(result);
+          }
+          int remaining = --(*requests_count);
+          if (remaining == 0) {
+            answer_query(JsonMessageFullData(message_data.get(), this), std::move(*shared_query));
+          }
+        });
+
+    send_request(make_object<td_api::getMessageViewers>(chat_id, message_id),
+                 td::make_unique<TdOnGenericCallback>(std::move(viewers_promise)));
+  }
+
+  if (*requests_count == 0) {
+    answer_query(JsonMessageFullData(message_data.get(), this), std::move(query));
+  }
+}
+
+td::Status Client::process_get_statistical_graph_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+  int64 chat_id = get_int64_arg(query.get(), "chat_id", 0);
+  auto token = query->arg("token");
+  int64 x = get_int64_arg(query.get(), "x", 0);
+
+  send_request(make_object<td_api::getStatisticalGraph>(chat_id, token.str(), x),
+               td::make_unique<TdOnGetStatisticalGraphCallback>(std::move(query)));
+
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_chat_statistics_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+  auto chat_id = query->arg("chat_id");
+  bool is_dark = to_bool(query->arg("is_dark"));
+
+  check_chat(
+      chat_id, AccessRights::Write, std::move(query),
+      [this, is_dark](int64 chat_id, PromisedQueryPtr query) mutable {
+        send_request(make_object<td_api::getChatStatistics>(chat_id, is_dark),
+                     td::make_unique<TdOnGetChatStatisticsCallback>(std::move(query)));
+      },
+      true);
+
+  return td::Status::OK();
+}
+
+
+// end my custum methods impl
+
 //start custom auth methods impl
 
 void Client::process_auth_phone_number_query(PromisedQueryPtr &query) {
