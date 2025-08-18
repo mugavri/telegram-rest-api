@@ -6180,7 +6180,7 @@ class Client::JsonChatStatisticsInviterInfo final : public td::Jsonable {
     auto object = scope->enter_object();
 
     object("user_id", info_->user_id_);
-    object("added_member_count_", td::JsonInt(info_->added_member_count_));
+    object("added_member_count", td::JsonInt(info_->added_member_count_));
   }
 
  private:
