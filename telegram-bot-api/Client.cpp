@@ -13772,34 +13772,34 @@ td::Status Client::process_copy_messages_query(PromisedQueryPtr &query) {
   auto send_options =
       get_message_send_options(disable_notification, protect_content, false, 0, direct_messages_topic_id,
                                std::move(input_suggested_post_info), std::move(send_at));
-  auto on_success =
-      [this, from_chat_id = from_chat_id.str(), message_ids = std::move(message_ids), disable_notification,
-       protect_content, send_at = std::move(send_at), send_options = std::move(send_options),
-       remove_caption](int64 chat_id, int64 message_thread_id, CheckedReplyParameters, PromisedQueryPtr query) mutable {
-        auto it = yet_unsent_message_count_.find(chat_id);
-        if (it != yet_unsent_message_count_.end() && it->second >= MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
-          return fail_query_flood_limit_exceeded(std::move(query));
-        }
+  auto on_success = [this, from_chat_id = from_chat_id.str(), message_ids = std::move(message_ids),
+                     send_at = std::move(send_at), send_options = std::move(send_options),
+                     remove_caption](int64 chat_id, int64 message_thread_id, CheckedReplyParameters,
+                                     PromisedQueryPtr query) mutable {
+    auto it = yet_unsent_message_count_.find(chat_id);
+    if (it != yet_unsent_message_count_.end() && it->second >= MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
+      return fail_query_flood_limit_exceeded(std::move(query));
+    }
 
-        check_messages(
-            from_chat_id, std::move(message_ids), true, AccessRights::Read, "message to forward", std::move(query),
-            [this, chat_id, message_thread_id, send_options = std::move(send_options), disable_notification,
-             protect_content, remove_caption, send_at = std::move(send_at)](
-                int64 from_chat_id, td::vector<int64> message_ids, PromisedQueryPtr query) mutable {
-              auto &count = yet_unsent_message_count_[chat_id];
-              if (count >= MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
-                return fail_query_flood_limit_exceeded(std::move(query));
-              }
+    check_messages(
+        from_chat_id, std::move(message_ids), true, AccessRights::Read, "message to forward", std::move(query),
+        [this, chat_id, message_thread_id, send_options = std::move(send_options), remove_caption,
+         send_at = std::move(send_at)](int64 from_chat_id, td::vector<int64> message_ids,
+                                       PromisedQueryPtr query) mutable {
+          auto &count = yet_unsent_message_count_[chat_id];
+          if (count >= MAX_CONCURRENTLY_SENT_CHAT_MESSAGES) {
+            return fail_query_flood_limit_exceeded(std::move(query));
+          }
 
-              auto message_count = message_ids.size();
-              count += static_cast<int32>(message_count);
+          auto message_count = message_ids.size();
+          count += static_cast<int32>(message_count);
 
-              send_request(
-                  make_object<td_api::forwardMessages>(chat_id, message_thread_id, from_chat_id, std::move(message_ids),
-                                                       std::move(send_options), true, remove_caption),
-                  td::make_unique<TdOnForwardMessagesCallback>(this, chat_id, message_count, std::move(query)));
-            });
-      };
+          send_request(
+              make_object<td_api::forwardMessages>(chat_id, message_thread_id, from_chat_id, std::move(message_ids),
+                                                   std::move(send_options), true, remove_caption),
+              td::make_unique<TdOnForwardMessagesCallback>(this, chat_id, message_count, std::move(query)));
+        });
+  };
   check_reply_parameters(chat_id, InputReplyParameters(), message_thread_id, std::move(query), std::move(on_success));
 
   return td::Status::OK();
