@@ -7911,8 +7911,7 @@ class Client::TdOnGetChatInviteLinkCallback final : public TdQueryCallback {
     } else {
       CHECK(result->get_id() == td_api::chatInviteLinks::ID);
       auto invite_links = move_object_as<td_api::chatInviteLinks>(result);
-      CHECK(!invite_links->invite_links_.empty());
-      answer_query(JsonChatInviteLink(invite_links->invite_links_[0].get(), client_), std::move(query_));
+      answer_query(JsonChatInviteLinks(invite_links.get(), client_), std::move(query_));
     }
   }
 
