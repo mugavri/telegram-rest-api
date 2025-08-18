@@ -5953,8 +5953,7 @@ class Client::JsonMessageViewer final : public td::Jsonable {
 
   void store(td::JsonValueScope *scope) const {
     auto object = scope->enter_object();
-    // object("user", JsonUser(viewer_->user_id_, nullptr));
-    object("user_id", viewer_->user_id_);
+    object("user", JsonUser(viewer_->user_id_, client_));
     object("date", viewer_->view_date_);
   }
 
