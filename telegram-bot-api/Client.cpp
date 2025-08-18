@@ -1001,10 +1001,31 @@ class Client::JsonChatLocation final : public td::Jsonable {
   const td_api::chatLocation *chat_location_;
 };
 
+class Client::JsonChatInviteLinkMember final : public td::Jsonable {
+ public:
+  JsonChatInviteLinkMember(const td_api::chatInviteLinkMember *chat_invite_link_member, const Client *client)
+      : chat_invite_link_member_(chat_invite_link_member), client_(client) {
+  }
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    // object("user_id", chat_invite_link_member_->user_id_);
+    object("user", JsonUser(chat_invite_link_member_->user_id_, client_));
+    object("joined_chat_date", chat_invite_link_member_->joined_chat_date_);
+    object("via_chat_folder_invite_link", td::JsonBool(chat_invite_link_member_->via_chat_folder_invite_link_));
+    object("approver_user_id", chat_invite_link_member_->approver_user_id_);
+  }
+
+ private:
+  const td_api::chatInviteLinkMember *chat_invite_link_member_;
+  const Client *client_;
+};
+
 class Client::JsonChatInviteLink final : public td::Jsonable {
  public:
-  JsonChatInviteLink(const td_api::chatInviteLink *chat_invite_link, const Client *client)
-      : chat_invite_link_(chat_invite_link), client_(client) {
+  JsonChatInviteLink(const td_api::chatInviteLink *chat_invite_link, const Client *client,
+                     const td::vector<object_ptr<td_api::chatInviteLinkMember>> *members = nullptr,
+                     const td::vector<object_ptr<td_api::chatInviteLinkMember>> *expired_members = nullptr)
+      : chat_invite_link_(chat_invite_link), client_(client), members_(members), expired_members_(expired_members) {
   }
   void store(td::JsonValueScope *scope) const {
     auto object = scope->enter_object();
@@ -1028,8 +1049,18 @@ class Client::JsonChatInviteLink final : public td::Jsonable {
     if (chat_invite_link_->member_count_ != 0) {
       object("member_count", chat_invite_link_->member_count_);
     }
+    if (members_ != nullptr && !members_->empty()) {
+      object("members", td::json_array(*members_, [client = client_](auto &member) {
+               return JsonChatInviteLinkMember(member.get(), client);
+             }));
+    }
     if (chat_invite_link_->expired_member_count_ != 0) {
       object("expired_member_count", chat_invite_link_->expired_member_count_);
+    }
+    if (expired_members_ != nullptr && !expired_members_->empty()) {
+      object("expired_members", td::json_array(*expired_members_, [client = client_](auto &member) {
+               return JsonChatInviteLinkMember(member.get(), client);
+             }));
     }
     if (chat_invite_link_->pending_join_request_count_ != 0) {
       object("pending_join_request_count", chat_invite_link_->pending_join_request_count_);
@@ -1046,6 +1077,8 @@ class Client::JsonChatInviteLink final : public td::Jsonable {
  private:
   const td_api::chatInviteLink *chat_invite_link_;
   const Client *client_;
+  const td::vector<object_ptr<td_api::chatInviteLinkMember>> *members_;
+  const td::vector<object_ptr<td_api::chatInviteLinkMember>> *expired_members_;
 };
 
 class Client::JsonMessage final : public td::Jsonable {
