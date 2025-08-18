@@ -1013,11 +1013,23 @@ class Client::JsonChatInviteLink final : public td::Jsonable {
       object("name", chat_invite_link_->name_);
     }
     object("creator", JsonUser(chat_invite_link_->creator_user_id_, client_));
+    if (chat_invite_link_->date_ != 0) {
+      object("date", chat_invite_link_->date_);
+    }
+    if (chat_invite_link_->edit_date_ != 0) {
+      object("edit_date", chat_invite_link_->edit_date_);
+    }
     if (chat_invite_link_->expiration_date_ != 0) {
       object("expire_date", chat_invite_link_->expiration_date_);
     }
     if (chat_invite_link_->member_limit_ != 0) {
       object("member_limit", chat_invite_link_->member_limit_);
+    }
+    if (chat_invite_link_->member_count_ != 0) {
+      object("member_count", chat_invite_link_->member_count_);
+    }
+    if (chat_invite_link_->expired_member_count_ != 0) {
+      object("expired_member_count", chat_invite_link_->expired_member_count_);
     }
     if (chat_invite_link_->pending_join_request_count_ != 0) {
       object("pending_join_request_count", chat_invite_link_->pending_join_request_count_);
