@@ -367,6 +367,34 @@ class Client final : public WebhookActor::Callback {
   class JsonChatStatistics;
   class TdOnGetChatStatisticsCallback;
 
+  class JsonChatInviteLinks;
+  class JsonChatInviteLinkCount;
+  class TdOnGetChatInviteLinkCountsCallback;
+  class TdOnGetChatInviteLinkMembersCallback;
+  class JsonChatInviteLinkMember;
+  class JsonChatInviteLinkMembers;
+
+  struct InviteLinksFullData {
+    int64 chat_id;
+    PromisedQueryPtr query;
+    int pending_requests = 0;
+    td::vector<object_ptr<td_api::chatInviteLink>> all_invite_links;
+    td::FlatHashMap<td::string, td::vector<object_ptr<td_api::chatInviteLinkMember>>> invite_link_members;
+    td::FlatHashMap<td::string, td::vector<object_ptr<td_api::chatInviteLinkMember>>> expired_invite_link_members;
+
+    void on_request_complete(Client *client);
+  };
+
+  class TdOnGetChatInviteLinksFullDataCallback;
+  class TdOnGetUserInviteLinksCallback;
+  class TdOnGetInviteLinkMembersCallback;
+  class JsonInviteLinksFullData;
+
+  void get_user_invite_links(int64 chat_id, int64 user_id, bool is_revoked,
+                             std::shared_ptr<InviteLinksFullData> full_data);
+  void get_invite_link_members(int64 chat_id, const td::string &invite_link, bool only_with_expired_subscription,
+                               std::shared_ptr<InviteLinksFullData> full_data);
+
   void get_message_properties_and_data(int64 chat_id, int64 message_id, PromisedQueryPtr query);
   void fetch_message_additional_data(int64 chat_id, int64 message_id, object_ptr<td_api::messageProperties> properties,
                                      PromisedQueryPtr query);
@@ -1005,6 +1033,12 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_message_query(PromisedQueryPtr &query);
   td::Status process_get_statistical_graph_query(PromisedQueryPtr &query);
   td::Status process_get_chat_statistics_query(PromisedQueryPtr &query);
+
+  td::Status process_get_chat_invite_link(PromisedQueryPtr &query);
+  td::Status process_get_chat_invite_links(PromisedQueryPtr &query);
+  td::Status process_get_chat_invite_link_counts(PromisedQueryPtr &query);
+  td::Status process_get_chat_invite_link_members(PromisedQueryPtr &query);
+  td::Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);
