@@ -356,6 +356,8 @@ class Client final : public WebhookActor::Callback {
   class TdOnGetMessagePropertiesCallback;
   class TdOnGenericCallback;
 
+  class TdOnGetMessageStatisticsCallback;
+
   class TdOnGetStatisticalGraphCallback;
 
   class JsonChatStatisticsInviterInfo;
@@ -1031,6 +1033,7 @@ class Client final : public WebhookActor::Callback {
 
   // my custum methods
   td::Status process_get_message_query(PromisedQueryPtr &query);
+  td::Status process_get_message_statistics_query(PromisedQueryPtr &query);
   td::Status process_get_statistical_graph_query(PromisedQueryPtr &query);
   td::Status process_get_chat_statistics_query(PromisedQueryPtr &query);
 

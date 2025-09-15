@@ -416,6 +416,7 @@ bool Client::init_methods() {
 
   // my custum methods
   methods_.emplace("getmessage", &Client::process_get_message_query);
+  methods_.emplace("getmessagestatistics", &Client::process_get_message_statistics_query);
   methods_.emplace("getstatisticalgraph", &Client::process_get_statistical_graph_query);
   methods_.emplace("getchatstatistics", &Client::process_get_chat_statistics_query);
 
@@ -8545,6 +8546,24 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
     CHECK(result->get_id() == td_api::proxy::ID);
     auto proxy = move_object_as<td_api::proxy>(result);
     answer_query(JsonProxy(proxy), std::move(query_));
+  }
+
+ private:
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetMessageStatisticsCallback final : public TdQueryCallback {
+ public:
+  TdOnGetMessageStatisticsCallback(PromisedQueryPtr query) : query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto statistics = move_object_as<td_api::messageStatistics>(result);
+    answer_query(JsonMessageStatistics(statistics.get()), std::move(query_));
   }
 
  private:
@@ -16854,6 +16873,20 @@ td::Status Client::process_get_message_query(PromisedQueryPtr &query) {
   check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
                 [this](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
                   get_message_properties_and_data(chat_id, message_id, std::move(query));
+                });
+
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_message_statistics_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+  auto chat_id = query->arg("chat_id");
+  auto message_id = get_message_id(query.get(), "message_id");
+
+  check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
+                [this](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+                  send_request(make_object<td_api::getMessageStatistics>(chat_id, message_id, false),
+                               td::make_unique<TdOnGetMessageStatisticsCallback>(std::move(query)));
                 });
 
   return td::Status::OK();
