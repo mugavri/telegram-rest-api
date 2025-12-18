@@ -426,6 +426,8 @@ bool Client::init_methods() {
   methods_.emplace("getchatinvitelinkmembers", &Client::process_get_chat_invite_link_members);
   methods_.emplace("getchatinvitelinksfulldata", &Client::process_get_chat_invite_links_full_data);
 
+  methods_.emplace("setsupergroupusername", &Client::process_set_supergroup_username_query);
+
   return true;
 }
 
@@ -6250,7 +6252,7 @@ class Client::JsonChatStatisticsAdministratorActionsInfo final : public td::Json
     object("user_id", info_->user_id_);
     object("deleted_message_count", td::JsonInt(info_->deleted_message_count_));
     object("banned_user_count", td::JsonInt(info_->banned_user_count_));
-    object("restricted_user_count_", td::JsonInt(info_->restricted_user_count_));
+    object("restricted_user_count", td::JsonInt(info_->restricted_user_count_));
   }
 
  private:
@@ -6286,7 +6288,7 @@ class Client::JsonChatStatisticsInteractionInfo final : public td::Jsonable {
       case td_api::chatStatisticsObjectTypeMessage::ID: {
         object("type", "message");
         auto message_type = static_cast<const td_api::chatStatisticsObjectTypeMessage *>(info_->object_type_.get());
-        object("message_id", message_type->message_id_);
+        object("message_id", as_client_message_id(message_type->message_id_));
         break;
       }
       case td_api::chatStatisticsObjectTypeStory::ID: {
@@ -17121,6 +17123,25 @@ td::Status Client::process_get_chat_invite_links_full_data(PromisedQueryPtr &que
     send_request(make_object<td_api::getChatInviteLinkCounts>(chat_id),
                  td::make_unique<TdOnGetChatInviteLinksFullDataCallback>(this, chat_id, std::move(query)));
   });
+  return td::Status::OK();
+}
+
+td::Status Client::process_set_supergroup_username_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  auto username = query->arg("username");
+
+  check_chat(chat_id, AccessRights::Write, std::move(query),
+             [this, username = username.str()](int64 chat_id, PromisedQueryPtr query) {
+               auto chat_info = get_chat(chat_id);
+               CHECK(chat_info != nullptr);
+
+               CHECK(chat_info->type == ChatInfo::Type::Supergroup);
+
+               send_request(make_object<td_api::setSupergroupUsername>(chat_info->supergroup_id, username),
+                            td::make_unique<TdOnOkQueryCallback>(std::move(query)));
+             });
   return td::Status::OK();
 }
 

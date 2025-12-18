@@ -1042,6 +1042,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_chat_invite_link_counts(PromisedQueryPtr &query);
   td::Status process_get_chat_invite_link_members(PromisedQueryPtr &query);
   td::Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
+  td::Status process_set_supergroup_username_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);
