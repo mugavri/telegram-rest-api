@@ -109,6 +109,15 @@ void ClientManager::send(PromisedQueryPtr query) {
       return;
     }
 
+    if (is_global_flood_control_enabled_) {
+      auto now = td::Time::now();
+      auto wakeup_at = global_flood_control_.get_wakeup_at();
+      if (wakeup_at > now) {
+        LOG(WARNING) << "Failed to create Client with token " << token;
+        return query->set_retry_after_error(static_cast<int>(wakeup_at - now) + 1);
+      }
+      global_flood_control_.add_event(now);
+    }
     auto tqueue_id = get_tqueue_id(user_id, query->is_test_dc());
     if (active_client_count_.count(tqueue_id) != 0) {
       // return query->set_retry_after_error(1);
@@ -703,6 +712,12 @@ void ClientManager::timeout_expired() {
       LOG(WARNING) << "TQueue GC already deleted " << tqueue_deleted_events_ << " events since the start";
       last_tqueue_deleted_events_ = tqueue_deleted_events_;
     }
+  }
+
+  if (!is_global_flood_control_enabled_ && !parameters_->local_mode_) {
+    is_global_flood_control_enabled_ = true;
+    global_flood_control_.add_limit(60, 1000);        // 1000 in a minute
+    global_flood_control_.add_limit(60 * 60, 10000);  // 10000 in an hour
   }
 }
 

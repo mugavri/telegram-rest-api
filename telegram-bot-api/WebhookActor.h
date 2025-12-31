@@ -71,9 +71,9 @@ class WebhookActor final : public td::HttpOutboundConnection::Callback {
 
  private:
   static constexpr std::size_t MIN_PENDING_UPDATES_WARNING = 50;
-  static constexpr int IP_ADDRESS_CACHE_TIME = 30 * 60;  // 30 minutes
-  static constexpr int WEBHOOK_MAX_RESEND_TIMEOUT = 60;
-  static constexpr int WEBHOOK_DROP_TIMEOUT = 60 * 60 * 23;
+  static constexpr td::int32 IP_ADDRESS_CACHE_TIME = 30 * 60;  // 30 minutes
+  static constexpr td::int32 WEBHOOK_MAX_RESEND_TIMEOUT = 60;
+  static constexpr td::int32 WEBHOOK_DROP_TIMEOUT = 60 * 60 * 23;
 
   static std::atomic<td::uint64> total_connection_count_;
 

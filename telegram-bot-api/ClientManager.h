@@ -69,6 +69,8 @@ class ClientManager final : public td::Actor {
 
   td::FlatHashMap<td::string, td::uint64> token_to_id_;
   td::FlatHashMap<td::string, td::FloodControlFast> flood_controls_;
+  td::FloodControlFast global_flood_control_;
+  bool is_global_flood_control_enabled_ = false;
   td::FlatHashMap<td::int64, td::uint64> active_client_count_;
 
   bool close_flag_ = false;

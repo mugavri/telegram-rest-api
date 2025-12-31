@@ -148,7 +148,7 @@ td::Status WebhookActor::create_connection() {
       return create_webhook_error("Can't connect to the webhook proxy", r_proxy_socket_fd.move_as_error(), false);
     }
     if (!was_checked_) {
-      // verify webhook even we can't establish connection to the webhook
+      // verify webhook even if we can't establish connection to the webhook
       was_checked_ = true;
       on_webhook_verified();
     }
@@ -552,7 +552,12 @@ td::Status WebhookActor::send_update() {
 
   td::HttpHeaderCreator hc;
   hc.init_post(url_.query_);
-  hc.add_header("Host", url_.host_);
+  if ((url_.protocol_ == td::HttpUrl::Protocol::Https && url_.port_ == 443) ||
+      (url_.protocol_ == td::HttpUrl::Protocol::Http && url_.port_ == 80)) {
+    hc.add_header("Host", url_.host_);
+  } else {
+    hc.add_header("Host", PSLICE() << url_.host_ << ':' << url_.port_);
+  }
   if (!url_.userinfo_.empty()) {
     hc.add_header("Authorization", PSLICE() << "Basic " << td::base64_encode(url_.userinfo_));
   }
