@@ -11442,11 +11442,11 @@ td::Result<td_api::object_ptr<td_api::InputMessageContent>> Client::get_input_me
 
 td_api::object_ptr<td_api::messageSendOptions> Client::get_message_send_options(
     bool disable_notification, bool protect_content, bool allow_paid_broadcast, int64 effect_id,
-    int64 direct_messages_topic_id, object_ptr<td_api::inputSuggestedPostInfo> &&input_suggested_post_info,
+    object_ptr<td_api::inputSuggestedPostInfo> &&input_suggested_post_info,
     td_api::object_ptr<td_api::MessageSchedulingState> &&scheduling_state) {
-  return make_object<td_api::messageSendOptions>(direct_messages_topic_id, std::move(input_suggested_post_info),
-                                                 disable_notification, false, protect_content, allow_paid_broadcast, 0,
-                                                 false, std::move(scheduling_state), effect_id, 0, false);
+  return make_object<td_api::messageSendOptions>(std::move(input_suggested_post_info), disable_notification, false,
+                                                 protect_content, allow_paid_broadcast, 0, false,
+                                                 std::move(scheduling_state), effect_id, 0, false);
 }
 
 td::Result<td_api::object_ptr<td_api::inlineQueryResultsButton>> Client::get_inline_query_results_button(
@@ -14412,9 +14412,8 @@ td::Status Client::process_copy_messages_query(PromisedQueryPtr &query) {
   auto remove_caption = to_bool(query->arg("remove_caption"));
   TRY_RESULT(send_at, get_message_scheduling_state(query.get()));
 
-  auto send_options =
-      get_message_send_options(disable_notification, protect_content, false, effect_id, direct_messages_topic_id,
-                               std::move(input_suggested_post_info), std::move(send_at));
+  auto send_options = get_message_send_options(disable_notification, protect_content, false, effect_id,
+                                               std::move(input_suggested_post_info), std::move(send_at));
   auto on_success = [this, from_chat_id = from_chat_id.str(), message_ids = std::move(message_ids),
                      send_options = std::move(send_options),
                      remove_caption](int64 chat_id, object_ptr<td_api::MessageTopic> topic_id, CheckedReplyParameters,
@@ -14480,9 +14479,8 @@ td::Status Client::process_forward_messages_query(PromisedQueryPtr &query) {
   TRY_RESULT(input_suggested_post_info, get_input_suggested_post_info(query.get()));
   TRY_RESULT(send_at, get_message_scheduling_state(query.get()));
 
-  auto send_options =
-      get_message_send_options(disable_notification, protect_content, false, effect_id, direct_messages_topic_id,
-                               std::move(input_suggested_post_info), std::move(send_at));
+  auto send_options = get_message_send_options(disable_notification, protect_content, false, effect_id,
+                                               std::move(input_suggested_post_info), std::move(send_at));
   auto on_success = [this, from_chat_id = from_chat_id.str(), message_ids = std::move(message_ids),
                      send_options = std::move(send_options)](int64 chat_id, object_ptr<td_api::MessageTopic> topic_id,
                                                              CheckedReplyParameters, PromisedQueryPtr query) mutable {
@@ -14531,9 +14529,8 @@ td::Status Client::process_send_media_group_query(PromisedQueryPtr &query) {
   TRY_RESULT(input_message_contents, get_input_message_contents(query.get(), "media"));
   TRY_RESULT(send_at, get_message_scheduling_state(query.get()));
 
-  auto send_options =
-      get_message_send_options(disable_notification, protect_content, allow_paid_broadcast, effect_id,
-                               direct_messages_topic_id, std::move(input_suggested_post_info), std::move(send_at));
+  auto send_options = get_message_send_options(disable_notification, protect_content, allow_paid_broadcast, effect_id,
+                                               std::move(input_suggested_post_info), std::move(send_at));
   resolve_reply_markup_bot_usernames(
       std::move(reply_markup), std::move(query),
       [this, chat_id_str = chat_id.str(), forum_topic_id, direct_messages_topic_id,
@@ -17893,9 +17890,8 @@ void Client::do_send_message(object_ptr<td_api::InputMessageContent> input_messa
   }
   auto send_at = r_send_at.move_as_ok();
 
-  auto send_options =
-      get_message_send_options(disable_notification, protect_content, allow_paid_broadcast, effect_id,
-                               direct_messages_topic_id, r_input_suggested_post_info.move_as_ok(), std::move(send_at));
+  auto send_options = get_message_send_options(disable_notification, protect_content, allow_paid_broadcast, effect_id,
+                                               r_input_suggested_post_info.move_as_ok(), std::move(send_at));
   resolve_reply_markup_bot_usernames(
       std::move(reply_markup), std::move(query),
       [this, chat_id_str = chat_id.str(), forum_topic_id, direct_messages_topic_id,

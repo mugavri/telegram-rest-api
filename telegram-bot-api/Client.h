@@ -777,7 +777,7 @@ class Client final : public WebhookActor::Callback {
 
   static object_ptr<td_api::messageSendOptions> get_message_send_options(
       bool disable_notification, bool protect_content, bool allow_paid_broadcast, int64 effect_id,
-      int64 direct_messages_topic_id, object_ptr<td_api::inputSuggestedPostInfo> &&input_suggested_post_info,
+      object_ptr<td_api::inputSuggestedPostInfo> &&input_suggested_post_info,
       object_ptr<td_api::MessageSchedulingState> &&scheduling_state);
 
   static td::Result<td::vector<object_ptr<td_api::formattedText>>> get_poll_options(const Query *query);
