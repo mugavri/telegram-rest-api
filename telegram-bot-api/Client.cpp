@@ -11449,7 +11449,6 @@ td_api::object_ptr<td_api::messageSendOptions> Client::get_message_send_options(
                                                  false, std::move(scheduling_state), effect_id, 0, false);
 }
 
-
 td::Result<td_api::object_ptr<td_api::inlineQueryResultsButton>> Client::get_inline_query_results_button(
     td::JsonValue &&value) {
   if (value.type() != td::JsonValue::Type::Object) {
@@ -19761,7 +19760,6 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   message_info->edit_date = message->edit_date_;
   message_info->media_album_id = message->media_album_id_;
   message_info->via_bot_user_id = message->via_bot_user_id_;
-  message_info->message_thread_id = message->message_thread_id_;
 
   if (message->forward_info_ != nullptr) {
     message_info->initial_send_date = message->forward_info_->date_;
