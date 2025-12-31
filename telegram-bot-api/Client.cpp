@@ -13613,7 +13613,15 @@ td::Result<td_api::object_ptr<td_api::MessageSchedulingState>> Client::get_messa
     return make_object<td_api::messageSchedulingStateSendWhenOnline>();
   } else {
     TRY_RESULT(send_at_date, td::to_integer_safe<td::int32>(send_at));
-    return make_object<td_api::messageSchedulingStateSendAtDate>(send_at_date);
+
+    auto repeat_period_text = query->arg("repeat_period");
+    td::int32 repeat_period = 0;
+
+    if (!repeat_period_text.empty()) {
+      repeat_period = td::clamp(td::to_integer<int32>(query->arg("repeat_period")), 0, 365 * 86400);
+    }
+
+    return make_object<td_api::messageSchedulingStateSendAtDate>(send_at_date, repeat_period);
   }
 }
 
