@@ -1,6 +1,7 @@
 {
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
+        "*.js": "javascriptreact",
         "cmath": "cpp",
         "cstdarg": "cpp",
         "cstddef": "cpp",
@@ -75,6 +76,8 @@
         "__verbose_abort": "cpp",
         "ios": "cpp",
         "locale": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "csignal": "cpp",
+        "numeric": "cpp"
     }
 }
