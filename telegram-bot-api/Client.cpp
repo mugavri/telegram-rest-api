@@ -3963,7 +3963,8 @@ class Client::JsonMessageInteractionInfo : public td::Jsonable {
     int64 replies_count = 0;
 
     if (info_->reactions_ != nullptr) {
-      for (auto &reaction : info_->reactions_.get()->reactions_) {
+      auto &reactions_list = info_->reactions_->reactions_;
+      for (auto &reaction : reactions_list) {
         const td_api::messageReaction *reaction_ptr = reaction.get();
         reactions_count += reaction_ptr->total_count_;
       }
@@ -19812,6 +19813,8 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   if (message->interaction_info_ != nullptr) {
     message_info->views = message->interaction_info_->view_count_;
     message_info->forwards = message->interaction_info_->forward_count_;
+
+    message_info->interaction_info = std::move(message->interaction_info_);
   }
   message_info->is_scheduled = message->scheduling_state_ != nullptr;
   if (message->scheduling_state_ != nullptr &&
