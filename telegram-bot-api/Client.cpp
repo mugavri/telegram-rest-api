@@ -420,6 +420,7 @@ bool Client::init_methods() {
 
   // my custum methods
   methods_.emplace("getmessage", &Client::process_get_message_query);
+  methods_.emplace("getmessagepublicforwards", &Client::process_get_message_public_forwards_query);
   methods_.emplace("getmessagestatistics", &Client::process_get_message_statistics_query);
   methods_.emplace("getstatisticalgraph", &Client::process_get_statistical_graph_query);
   methods_.emplace("getchatstatistics", &Client::process_get_chat_statistics_query);
@@ -8744,6 +8745,26 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
 
  private:
   PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetMessagePublicForwardsCallback final : public TdQueryCallback {
+ public:
+  TdOnGetMessagePublicForwardsCallback(Client *client, PromisedQueryPtr query) :client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) override {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto publicForwards = move_object_as<td_api::publicForwards>(result);
+    answer_query(JsonPublicForwards(publicForwards.get(), client_), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
+
 };
 
 class Client::TdOnGetMessageStatisticsCallback final : public TdQueryCallback {
@@ -17248,6 +17269,22 @@ td::Status Client::process_get_message_query(PromisedQueryPtr &query) {
   check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
                 [this](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
                   get_message_properties_and_data(chat_id, message_id, std::move(query));
+                });
+
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_message_public_forwards_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+  auto chat_id = query->arg("chat_id");
+  auto message_id = get_message_id(query.get(), "message_id");
+  auto offset = query->arg("offset");
+  auto limit = get_integer_arg(query.get(), "limit", 100, 1, 100);
+
+  check_message(chat_id, message_id, false, AccessRights::Read, "message", std::move(query),
+                [this, offset, limit](int64 chat_id, int64 message_id, PromisedQueryPtr query) {
+                  send_request(make_object<td_api::getMessagePublicForwards>(chat_id, message_id, offset.str(), limit),
+                               td::make_unique<TdOnGetMessagePublicForwardsCallback>(this, std::move(query)));
                 });
 
   return td::Status::OK();
