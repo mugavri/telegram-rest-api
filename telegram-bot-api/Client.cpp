@@ -8749,7 +8749,8 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
 
 class Client::TdOnGetMessagePublicForwardsCallback final : public TdQueryCallback {
  public:
-  TdOnGetMessagePublicForwardsCallback(Client *client, PromisedQueryPtr query) :client_(client), query_(std::move(query)) {
+  TdOnGetMessagePublicForwardsCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
   }
 
   void on_result(object_ptr<td_api::Object> result) override {
@@ -8764,7 +8765,6 @@ class Client::TdOnGetMessagePublicForwardsCallback final : public TdQueryCallbac
  private:
   Client *client_;
   PromisedQueryPtr query_;
-
 };
 
 class Client::TdOnGetMessageStatisticsCallback final : public TdQueryCallback {
