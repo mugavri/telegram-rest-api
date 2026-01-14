@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
   auto start_time = td::Time::now();
   auto shared_data = std::make_shared<SharedData>();
   auto parameters = std::make_unique<ClientParameters>();
-  parameters->version_ = "9.3";
+  parameters->version_ = "9.3.0-dev.1";
   parameters->shared_data_ = shared_data;
   parameters->start_time_ = start_time;
   auto net_query_stats = td::create_net_query_stats();
@@ -211,15 +211,18 @@ int main(int argc, char *argv[]) {
   options.add_option('\0', "version", "display version number and exit", [&] { need_print_version = true; });
   options.add_option('\0', "local", "allow the Bot API server to serve local requests",
                      [&] { parameters->local_mode_ = true; });
-  options.add_option('\0', "no-file-limit", "disable the file limits",
-		             [&] { parameters->no_file_limit_ = true; });
-  options.add_option('\0', "insecure", "allow the Bot API to send request via insecure HTTP", [&] { parameters->allow_http_ = true; });
-  options.add_option('\0', "relative", "use relative file path in local mode", [&] { parameters->use_relative_path_ = true; });
-  options.add_option('\0', "allow-users", "allow user accounts to use the API", [&] { parameters->allow_users_ = true; });
+  options.add_option('\0', "no-file-limit", "disable the file limits", [&] { parameters->no_file_limit_ = true; });
+  options.add_option('\0', "insecure", "allow the Bot API to send request via insecure HTTP",
+                     [&] { parameters->allow_http_ = true; });
+  options.add_option('\0', "relative", "use relative file path in local mode",
+                     [&] { parameters->use_relative_path_ = true; });
+  options.add_option('\0', "allow-users", "allow user accounts to use the API",
+                     [&] { parameters->allow_users_ = true; });
   options.add_option('\0', "allow-users-registration", "allow user accounts to be registered on the API",
                      [&] { parameters->allow_users_registration_ = true; });
 
-  options.add_option('\0', "stats-hide-sensible-data", "in the stats hide sensible data like bot token and webhook url", [&] { parameters->stats_hide_sensible_data_ = true; });
+  options.add_option('\0', "stats-hide-sensible-data", "in the stats hide sensible data like bot token and webhook url",
+                     [&] { parameters->stats_hide_sensible_data_ = true; });
 
   options.add_checked_option(
       '\0', "api-id",
@@ -232,8 +235,9 @@ int main(int argc, char *argv[]) {
                      td::OptionParser::parse_string(parameters->api_hash_));
   options.add_checked_option('p', "http-port", PSLICE() << "HTTP listening port (default is " << http_port << ")",
                              td::OptionParser::parse_integer(http_port));
-  options.add_checked_option('\0', "http-idle-timeout", PSLICE() << "HTTP idle timeout (default is " << http_idle_timeout << ")",
-                              td::OptionParser::parse_integer(http_idle_timeout));
+  options.add_checked_option('\0', "http-idle-timeout",
+                             PSLICE() << "HTTP idle timeout (default is " << http_idle_timeout << ")",
+                             td::OptionParser::parse_integer(http_idle_timeout));
   options.add_checked_option('s', "http-stat-port", "HTTP statistics port",
                              td::OptionParser::parse_integer(http_stat_port));
   options.add_option('d', "dir", "server working directory", td::OptionParser::parse_string(working_directory));
@@ -301,12 +305,15 @@ int main(int argc, char *argv[]) {
   (void)main_thread_affinity;
 #endif
 
-
-  options.add_checked_option('\0', "max-batch-operations", PSLICE() << "maximum number of batch operations (default: " << parameters->max_batch_operations << ")",
-                            td::OptionParser::parse_integer(parameters->max_batch_operations));
-  options.add_checked_option('\0', "file-expiration-time",
-                             PSLICE() << "downloaded files expire after this amount of seconds of not being used (defaults to " << parameters->file_expiration_timeout_seconds_ << ")",
-                             td::OptionParser::parse_integer(parameters->file_expiration_timeout_seconds_));
+  options.add_checked_option(
+      '\0', "max-batch-operations",
+      PSLICE() << "maximum number of batch operations (default: " << parameters->max_batch_operations << ")",
+      td::OptionParser::parse_integer(parameters->max_batch_operations));
+  options.add_checked_option(
+      '\0', "file-expiration-time",
+      PSLICE() << "downloaded files expire after this amount of seconds of not being used (defaults to "
+               << parameters->file_expiration_timeout_seconds_ << ")",
+      td::OptionParser::parse_integer(parameters->file_expiration_timeout_seconds_));
 
   options.add_checked_option('\0', "proxy",
                              "HTTP proxy server for outgoing webhook requests in the format http://host:port",
@@ -504,7 +511,8 @@ int main(int argc, char *argv[]) {
   if (http_stat_port != 0) {
     sched
         .create_actor_unsafe<HttpServer>(
-            SharedData::get_client_scheduler_id(), "HttpStatsServer", http_stat_ip_address, http_stat_port, http_idle_timeout,
+            SharedData::get_client_scheduler_id(), "HttpStatsServer", http_stat_ip_address, http_stat_port,
+            http_idle_timeout,
             [client_manager] {
               return td::ActorOwn<td::HttpInboundConnection::Callback>(
                   td::create_actor<HttpStatConnection>("HttpStatConnection", client_manager));
