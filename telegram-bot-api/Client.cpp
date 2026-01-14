@@ -19850,10 +19850,11 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   if (message->interaction_info_ != nullptr) {
     message_info->views = message->interaction_info_->view_count_;
     message_info->forwards = message->interaction_info_->forward_count_;
-
     message_info->interaction_info = std::move(message->interaction_info_);
   }
+
   message_info->is_scheduled = message->scheduling_state_ != nullptr;
+
   if (message->scheduling_state_ != nullptr &&
       message->scheduling_state_->get_id() == td_api::messageSchedulingStateSendAtDate::ID) {
     auto scheduling_state = move_object_as<td_api::messageSchedulingStateSendAtDate>(message->scheduling_state_);
