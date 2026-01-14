@@ -19862,7 +19862,6 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   }
 
   message_info->can_be_saved = message->can_be_saved_;
-  message_info->is_scheduled = message->scheduling_state_ != nullptr;
   message_info->is_from_offline = message->is_from_offline_;
   message_info->topic_id = std::move(message->topic_id_);
   message_info->author_signature = std::move(message->author_signature_);
