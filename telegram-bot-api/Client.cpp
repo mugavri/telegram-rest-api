@@ -432,6 +432,7 @@ bool Client::init_methods() {
   methods_.emplace("getchatinvitelinksfulldata", &Client::process_get_chat_invite_links_full_data);
 
   methods_.emplace("setsupergroupusername", &Client::process_set_supergroup_username_query);
+  methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link_query);
 
   return true;
 }
@@ -1332,6 +1333,8 @@ class Client::JsonChat final : public td::Jsonable {
         if (supergroup_info->is_fake) {
           object("is_fake", td::JsonBool(supergroup_info->is_fake));
         }
+
+        object("status", Client::get_chat_member_status(supergroup_info->status));
         // end custom properties impl
 
         if (is_full_) {
@@ -6695,7 +6698,114 @@ void Client::InviteLinksFullData::on_request_complete(Client *client) {
   if (this->pending_requests == 0) {
     answer_query(JsonInviteLinksFullData(this, client), std::move(this->query));
   }
-}
+};
+
+class Client::JsonStarSubscriptionPricing final : public td::Jsonable {
+ public:
+  JsonStarSubscriptionPricing(const td_api::starSubscriptionPricing *pricing) : pricing_(pricing) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("star_count", pricing_->star_count_);
+    object("period", td::JsonInt(pricing_->period_));
+  }
+
+ private:
+  const td_api::starSubscriptionPricing *pricing_;
+};
+
+class Client::JsonChatInviteLinkSubscriptionInfo final : public td::Jsonable {
+ public:
+  JsonChatInviteLinkSubscriptionInfo(const td_api::chatInviteLinkSubscriptionInfo *info) : info_(info) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("pricing", JsonStarSubscriptionPricing(info_->pricing_.get()));
+    object("can_reuse", td::JsonBool(info_->can_reuse_));
+    object("form_id", info_->form_id_);
+  }
+
+ private:
+  const td_api::chatInviteLinkSubscriptionInfo *info_;
+};
+
+class Client::JsonVerificationStatus final : public td::Jsonable {
+ public:
+  JsonVerificationStatus(const td_api::verificationStatus *status) : status_(status) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("is_verified", td::JsonBool(status_->is_verified_));
+    object("is_scam", td::JsonBool(status_->is_scam_));
+    object("is_fake", td::JsonBool(status_->is_fake_));
+    if (status_->bot_verification_icon_custom_emoji_id_ != 0) {
+      object("bot_verification_icon_custom_emoji_id", status_->bot_verification_icon_custom_emoji_id_);
+    }
+  }
+
+ private:
+  const td_api::verificationStatus *status_;
+};
+
+class Client::JsonChatInviteLinkInfo final : public td::Jsonable {
+ public:
+  JsonChatInviteLinkInfo(const td_api::chatInviteLinkInfo *chat_invite_link_info, const Client *client)
+      : chat_invite_link_info_(chat_invite_link_info), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("chat_id", chat_invite_link_info_->chat_id_);
+    object("accessible_for", td::JsonInt(chat_invite_link_info_->accessible_for_));
+
+    if (chat_invite_link_info_->type_ != nullptr) {
+      switch (chat_invite_link_info_->type_->get_id()) {
+        case td_api::inviteLinkChatTypeBasicGroup::ID: {
+          object("type", "basic_group");
+          break;
+        }
+        case td_api::inviteLinkChatTypeSupergroup::ID: {
+          object("type", "supergroup");
+          break;
+        }
+        case td_api::inviteLinkChatTypeChannel::ID: {
+          object("type", "channel");
+          break;
+        }
+        default: {
+          object("type", "unknown");
+          break;
+        }
+      }
+    } else {
+      object("type", "unknown");
+    }
+
+    object("title", chat_invite_link_info_->title_);
+    if (chat_invite_link_info_->photo_ != nullptr) {
+      object("photo", JsonChatPhotoInfo(chat_invite_link_info_->photo_.get()));
+    }
+    object("accent_color_id", td::JsonInt(chat_invite_link_info_->accent_color_id_));
+    object("description", chat_invite_link_info_->description_);
+    object("member_count", td::JsonInt(chat_invite_link_info_->member_count_));
+    object("member_users", JsonUsers(chat_invite_link_info_->member_user_ids_, client_));
+    if (chat_invite_link_info_->subscription_info_ != nullptr) {
+      object("subscription_info", JsonChatInviteLinkSubscriptionInfo(chat_invite_link_info_->subscription_info_.get()));
+    }
+    object("creates_join_request", td::JsonBool(chat_invite_link_info_->creates_join_request_));
+    object("is_public", td::JsonBool(chat_invite_link_info_->is_public_));
+    if (chat_invite_link_info_->verification_status_ != nullptr) {
+      object("verification_status", JsonVerificationStatus(chat_invite_link_info_->verification_status_.get()));
+    }
+  }
+
+ private:
+  const td_api::chatInviteLinkInfo *chat_invite_link_info_;
+  const Client *client_;
+};
 
 class Client::TdOnOkCallback final : public TdQueryCallback {
  public:
@@ -9077,6 +9187,28 @@ class Client::TdOnGetInviteLinkMembersCallback final : public TdQueryCallback {
   bool only_with_expired_subscription_;
   std::shared_ptr<InviteLinksFullData> full_data_;
   object_ptr<td_api::chatInviteLinkMember> offset_member_;
+};
+
+class Client::TdOnCheckChatInviteLinkCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnCheckChatInviteLinkCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::chatInviteLinkInfo::ID);
+    auto invite_link_info = move_object_as<td_api::chatInviteLinkInfo>(result);
+
+    answer_query(JsonChatInviteLinkInfo(invite_link_info.get(), client_), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
 };
 
 //end custom callbacks impl
@@ -17552,6 +17684,17 @@ td::Status Client::process_set_supergroup_username_query(PromisedQueryPtr &query
                send_request(make_object<td_api::setSupergroupUsername>(chat_info->supergroup_id, username),
                             td::make_unique<TdOnOkQueryCallback>(std::move(query)));
              });
+  return td::Status::OK();
+}
+
+td::Status Client::process_check_chat_invite_link_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto invite_link = query->arg("invite_link");
+
+  send_request(make_object<td_api::checkChatInviteLink>(invite_link.str()),
+               td::make_unique<TdOnCheckChatInviteLinkCallback>(this, std::move(query)));
+
   return td::Status::OK();
 }
 

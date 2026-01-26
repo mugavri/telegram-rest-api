@@ -406,6 +406,13 @@ class Client final : public WebhookActor::Callback {
   void fetch_message_additional_data(int64 chat_id, int64 message_id, object_ptr<td_api::messageProperties> properties,
                                      PromisedQueryPtr query);
 
+  class JsonStarSubscriptionPricing;
+  class JsonChatInviteLinkSubscriptionInfo;
+  class JsonVerificationStatus;
+
+  class JsonChatInviteLinkInfo;
+  class TdOnCheckChatInviteLinkCallback;
+
   //end custom callbacks
 
   void on_get_reply_message(int64 chat_id, object_ptr<td_api::message> reply_to_message);
@@ -1068,6 +1075,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_chat_invite_link_members(PromisedQueryPtr &query);
   td::Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
   td::Status process_set_supergroup_username_query(PromisedQueryPtr &query);
+  td::Status process_check_chat_invite_link_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);
