@@ -9608,15 +9608,15 @@ void Client::check_chat_access(int64 chat_id, AccessRights access_rights, const 
           return fail_query(403, "Forbidden: bot was kicked from the channel chat", std::move(query));
         }
       }
-      bool is_public = !supergroup_info->active_usernames.empty() || supergroup_info->has_location;
-      bool need_more_access_rights = is_public ? need_edit_access : need_read_access;
-      if (!is_chat_member(supergroup_info->status) && need_more_access_rights) {
-        if (supergroup_info->is_supergroup) {
-          return fail_query(403, "Forbidden: bot is not a member of the supergroup chat", std::move(query));
-        } else {
-          return fail_query(403, "Forbidden: bot is not a member of the channel chat", std::move(query));
-        }
-      }
+      // bool is_public = !supergroup_info->active_usernames.empty() || supergroup_info->has_location;
+      // bool need_more_access_rights = is_public ? need_edit_access : need_read_access;
+      // if (!is_chat_member(supergroup_info->status) && need_more_access_rights) {
+      //   if (supergroup_info->is_supergroup) {
+      //      return fail_query(403, "Forbidden: bot is not a member of the supergroup chat", std::move(query));
+      //   } else {
+      //     return fail_query(403, "Forbidden: bot is not a member of the channel chat", std::move(query));
+      //   }
+      // }
       break;
     }
     case ChatInfo::Type::Unknown:
