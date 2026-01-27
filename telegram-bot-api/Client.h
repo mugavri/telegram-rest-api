@@ -413,6 +413,10 @@ class Client final : public WebhookActor::Callback {
   class JsonChatInviteLinkInfo;
   class TdOnCheckChatInviteLinkCallback;
 
+  class JsonMessageCalendarDay;
+  class JsonMessageCalendar;
+  class TdOnGetChatMessageCalendarCallback;
+
   //end custom callbacks
 
   void on_get_reply_message(int64 chat_id, object_ptr<td_api::message> reply_to_message);
@@ -854,6 +858,9 @@ class Client final : public WebhookActor::Callback {
   static td::Result<td_api::object_ptr<td_api::SearchMessagesChatTypeFilter>> get_search_messages_chat_type_filter(
       const Query *query, td::Slice field_name = td::Slice("chat_filter"));
 
+  static td::Result<td_api::object_ptr<td_api::MessageTopic>> get_message_topic_filter(
+      const Query *query, td::Slice field_name = td::Slice("topic_type"));
+
   // end custom helper methods
 
   void on_message_send_succeeded(object_ptr<td_api::message> &&message, int64 old_message_id);
@@ -1076,6 +1083,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_chat_invite_links_full_data(PromisedQueryPtr &query);
   td::Status process_set_supergroup_username_query(PromisedQueryPtr &query);
   td::Status process_check_chat_invite_link_query(PromisedQueryPtr &query);
+  td::Status process_get_chat_message_calendar_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);

@@ -433,6 +433,7 @@ bool Client::init_methods() {
 
   methods_.emplace("setsupergroupusername", &Client::process_set_supergroup_username_query);
   methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link_query);
+  methods_.emplace("getchatmessagecalendar", &Client::process_get_chat_message_calendar_query);
 
   return true;
 }
@@ -6807,6 +6808,49 @@ class Client::JsonChatInviteLinkInfo final : public td::Jsonable {
   const Client *client_;
 };
 
+class Client::JsonMessageCalendarDay final : public td::Jsonable {
+ public:
+  JsonMessageCalendarDay(const td_api::messageCalendarDay *day, Client *client) : day_(day), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    auto *mutable_day = const_cast<td_api::messageCalendarDay *>(day_);
+
+    auto message_full_id = client_->add_message(std::move(mutable_day->message_), true);
+
+    int64 calendar_message_id = message_full_id.message_id;
+    int64 chat_id = message_full_id.chat_id;
+    CHECK(calendar_message_id > 0);
+    const MessageInfo *calendar_message = client_->get_message(chat_id, calendar_message_id, true);
+    object("message", JsonMessage(calendar_message, false, "message calendar day", client_));
+
+    object("total_count", td::JsonInt(day_->total_count_));
+  }
+
+ private:
+  const td_api::messageCalendarDay *day_;
+  Client *client_;
+};
+
+class Client::JsonMessageCalendar final : public td::Jsonable {
+ public:
+  JsonMessageCalendar(const td_api::messageCalendar *calendar, Client *client) : calendar_(calendar), client_(client) {
+  }
+
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("total_count", td::JsonInt(calendar_->total_count_));
+    object("days", td::json_array(calendar_->days_, [client = client_](const auto &day) {
+             return JsonMessageCalendarDay(day.get(), client);
+           }));
+  }
+
+ private:
+  const td_api::messageCalendar *calendar_;
+  Client *client_;
+};
+
 class Client::TdOnOkCallback final : public TdQueryCallback {
  public:
   void on_result(object_ptr<td_api::Object> result) final {
@@ -9204,6 +9248,28 @@ class Client::TdOnCheckChatInviteLinkCallback final : public TdQueryCallback {
     auto invite_link_info = move_object_as<td_api::chatInviteLinkInfo>(result);
 
     answer_query(JsonChatInviteLinkInfo(invite_link_info.get(), client_), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
+};
+
+class Client::TdOnGetChatMessageCalendarCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnGetChatMessageCalendarCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::messageCalendar::ID);
+    auto message_calendar = move_object_as<td_api::messageCalendar>(result);
+
+    answer_query(JsonMessageCalendar(message_calendar.get(), client_), std::move(query_));
   }
 
  private:
@@ -13906,6 +13972,32 @@ td::Result<td_api::object_ptr<td_api::SearchMessagesChatTypeFilter>> Client::get
   return std::move(result);
 }
 
+td::Result<td_api::object_ptr<td_api::MessageTopic>> Client::get_message_topic_filter(const Query *query,
+                                                                                      td::Slice field_name) {
+  auto filter = query->arg(field_name);
+  auto topic_id = query->arg("topic_id");
+
+  if (!filter.empty()) {
+    CHECK(td::to_integer<int64>(topic_id) > 0);
+  }
+
+  object_ptr<td_api::MessageTopic> result;
+  if (filter.empty()) {
+    result = nullptr;
+  } else if (filter == "thread") {
+    result = make_object<td_api::messageTopicThread>(td::to_integer<int64>(topic_id));
+  } else if (filter == "forum") {
+    result = make_object<td_api::messageTopicForum>(td::to_integer<int32>(topic_id));
+  } else if (filter == "direct_messages") {
+    result = make_object<td_api::messageTopicDirectMessages>(td::to_integer<int64>(topic_id));
+  } else if (filter == "saved_messages") {
+    result = make_object<td_api::messageTopicSavedMessages>(td::to_integer<int64>(topic_id));
+  } else {
+    return td::Status::Error(400, "Filter not valid");
+  }
+  return std::move(result);
+}
+
 // end custom helper methods impl
 
 void Client::on_message_send_succeeded(object_ptr<td_api::message> &&message, int64 old_message_id) {
@@ -17695,6 +17787,24 @@ td::Status Client::process_check_chat_invite_link_query(PromisedQueryPtr &query)
   send_request(make_object<td_api::checkChatInviteLink>(invite_link.str()),
                td::make_unique<TdOnCheckChatInviteLinkCallback>(this, std::move(query)));
 
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_chat_message_calendar_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  TRY_RESULT(topic, get_message_topic_filter(query.get()));
+  TRY_RESULT(filter, get_search_messages_filter(query.get()));
+  auto from_message_id = get_message_id(query.get(), "from_message_id");
+
+  check_chat(chat_id, AccessRights::Read, std::move(query),
+             [this, topic = std::move(topic), filter = std::move(filter), from_message_id](
+                 int64 chat_id, PromisedQueryPtr query) mutable {
+               send_request(make_object<td_api::getChatMessageCalendar>(chat_id, std::move(topic), std::move(filter),
+                                                                        from_message_id),
+                            td::make_unique<TdOnGetChatMessageCalendarCallback>(this, std::move(query)));
+             });
   return td::Status::OK();
 }
 
