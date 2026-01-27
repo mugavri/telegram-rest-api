@@ -434,6 +434,7 @@ bool Client::init_methods() {
   methods_.emplace("setsupergroupusername", &Client::process_set_supergroup_username_query);
   methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link_query);
   methods_.emplace("getchatmessagecalendar", &Client::process_get_chat_message_calendar_query);
+  methods_.emplace("getchatmessagebydate", &Client::process_get_chat_message_by_date_query);
 
   return true;
 }
@@ -9277,6 +9278,29 @@ class Client::TdOnGetChatMessageCalendarCallback final : public TdQueryCallback 
   PromisedQueryPtr query_;
 };
 
+class Client::TdOnReturnMessageCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnReturnMessageCallback(Client *client, PromisedQueryPtr query)
+      : client_(client), query_(std::move(query)) {
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    CHECK(result->get_id() == td_api::message::ID);
+
+    auto full_message_id = client_->add_message(move_object_as<td_api::message>(result));
+    const MessageInfo *m = client_->get_message(full_message_id.chat_id, full_message_id.message_id, true);
+    answer_query(JsonMessage(m, false, "message", client_), std::move(query_));
+  }
+
+ private:
+  Client *client_;
+  PromisedQueryPtr query_;
+};
+
 //end custom callbacks impl
 
 void Client::close() {
@@ -17804,6 +17828,20 @@ td::Status Client::process_get_chat_message_calendar_query(PromisedQueryPtr &que
                send_request(make_object<td_api::getChatMessageCalendar>(chat_id, std::move(topic), std::move(filter),
                                                                         from_message_id),
                             td::make_unique<TdOnGetChatMessageCalendarCallback>(this, std::move(query)));
+             });
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_chat_message_by_date_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  auto date = get_integer_arg(query.get(), "date", 0);
+
+  check_chat(chat_id, AccessRights::Read, std::move(query),
+             [this, date](int64 chat_id, PromisedQueryPtr query) mutable {
+               send_request(make_object<td_api::getChatMessageByDate>(chat_id, date),
+                            td::make_unique<TdOnReturnMessageCallback>(this, std::move(query)));
              });
   return td::Status::OK();
 }

@@ -416,6 +416,7 @@ class Client final : public WebhookActor::Callback {
   class JsonMessageCalendarDay;
   class JsonMessageCalendar;
   class TdOnGetChatMessageCalendarCallback;
+  class TdOnReturnMessageCallback;
 
   //end custom callbacks
 
@@ -1084,6 +1085,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_set_supergroup_username_query(PromisedQueryPtr &query);
   td::Status process_check_chat_invite_link_query(PromisedQueryPtr &query);
   td::Status process_get_chat_message_calendar_query(PromisedQueryPtr &query);
+  td::Status process_get_chat_message_by_date_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);
