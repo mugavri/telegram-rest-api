@@ -435,6 +435,7 @@ bool Client::init_methods() {
   methods_.emplace("checkchatinvitelink", &Client::process_check_chat_invite_link_query);
   methods_.emplace("getchatmessagecalendar", &Client::process_get_chat_message_calendar_query);
   methods_.emplace("getchatmessagebydate", &Client::process_get_chat_message_by_date_query);
+  methods_.emplace("getmessages", &Client::process_get_messages_query);
 
   return true;
 }
@@ -6039,6 +6040,9 @@ class Client::JsonMessagesArray : public td::Jsonable {
   void store(td::JsonValueScope *scope) const {
     auto array = scope->enter_array();
     for (auto &message : messages_) {
+      if (message == nullptr) {
+        continue;
+      }
       auto full_message_id = client_->add_message(std::move(message));
       const MessageInfo *m = client_->get_message(full_message_id.chat_id, full_message_id.message_id, true);
       array << JsonMessage(m, true, "search", client_);
@@ -17842,6 +17846,20 @@ td::Status Client::process_get_chat_message_by_date_query(PromisedQueryPtr &quer
              [this, date](int64 chat_id, PromisedQueryPtr query) mutable {
                send_request(make_object<td_api::getChatMessageByDate>(chat_id, date),
                             td::make_unique<TdOnReturnMessageCallback>(this, std::move(query)));
+             });
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_messages_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+  TRY_RESULT(message_ids, get_message_ids(query.get(), 500));
+
+  check_chat(chat_id, AccessRights::Read, std::move(query),
+             [this, message_ids = std::move(message_ids)](int64 chat_id, PromisedQueryPtr query) mutable {
+               send_request(make_object<td_api::getMessages>(chat_id, std::move(message_ids)),
+                            td::make_unique<TdOnReturnMessagesCallback>(this, std::move(query)));
              });
   return td::Status::OK();
 }
