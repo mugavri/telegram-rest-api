@@ -9653,7 +9653,7 @@ void Client::check_chat_access(int64 chat_id, AccessRights access_rights, const 
   CHECK(chat_info != nullptr);
   bool need_write_access = access_rights == AccessRights::Write;
   bool need_edit_access = access_rights == AccessRights::Edit || need_write_access;
-  bool need_read_access = true;
+  // bool need_read_access = true;
   switch (chat_info->type) {
     case ChatInfo::Type::Private: {
       auto user_info = get_user_info(chat_info->user_id);
