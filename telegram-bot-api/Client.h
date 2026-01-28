@@ -1087,6 +1087,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_chat_message_calendar_query(PromisedQueryPtr &query);
   td::Status process_get_chat_message_by_date_query(PromisedQueryPtr &query);
   td::Status process_get_messages_query(PromisedQueryPtr &query);
+  td::Status process_get_similar_chats_query(PromisedQueryPtr &query);
 
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);

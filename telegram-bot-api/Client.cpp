@@ -437,6 +437,8 @@ bool Client::init_methods() {
   methods_.emplace("getchatmessagebydate", &Client::process_get_chat_message_by_date_query);
   methods_.emplace("getmessages", &Client::process_get_messages_query);
 
+  methods_.emplace("getchatsimilarchats", &Client::process_get_similar_chats_query);
+
   return true;
 }
 
@@ -17860,6 +17862,19 @@ td::Status Client::process_get_messages_query(PromisedQueryPtr &query) {
              [this, message_ids = std::move(message_ids)](int64 chat_id, PromisedQueryPtr query) mutable {
                send_request(make_object<td_api::getMessages>(chat_id, std::move(message_ids)),
                             td::make_unique<TdOnReturnMessagesCallback>(this, std::move(query)));
+             });
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_similar_chats_query(PromisedQueryPtr &query) {
+  CHECK_IS_USER();
+
+  auto chat_id = query->arg("chat_id");
+
+  check_chat(chat_id, AccessRights::Read, std::move(query),
+             [this](int64 chat_id, PromisedQueryPtr query) mutable {
+               send_request(make_object<td_api::getChatSimilarChats>(chat_id),
+                            td::make_unique<TdOnGetChatsCallback>(this, std::move(query)));
              });
   return td::Status::OK();
 }
