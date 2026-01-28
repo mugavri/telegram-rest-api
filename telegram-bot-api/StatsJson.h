@@ -30,6 +30,7 @@
 #include "td/utils/VectorQueue.h"
 #include "td/utils/utf8.h"
 
+#include "telegram-bot-api/Stats.h"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -234,6 +235,9 @@ class JsonStatsBotAdvanced : public JsonStatsBot {
     object("pending_update_count", td::narrow_cast<td::int32>(bot_.pending_update_count_));
     object("webhook_max_connections", td::JsonInt(bot_.webhook_max_connections_));
     object("stats", JsonStatsBotStats(std::move(stats_)));
+    object("active_request_count", td::JsonLong(active_request_count_));
+    object("active_file_upload_bytes", td::JsonLong(active_file_upload_bytes_));
+    object("active_file_upload_count", td::JsonLong(active_file_upload_count_));
   }
  private:
   ServerBotInfo bot_;
