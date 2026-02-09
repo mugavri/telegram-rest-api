@@ -13,8 +13,14 @@ if [ -n "${1}" ]; then
   exec "${*}"
 fi
 
-DEFAULT_ARGS="--http-port 8081 --dir=${TELEGRAM_WORK_DIR} --temp-dir=${TELEGRAM_TEMP_DIR}"
+DEFAULT_ARGS="--dir=${TELEGRAM_WORK_DIR} --temp-dir=${TELEGRAM_TEMP_DIR}"
 CUSTOM_ARGS=""
+
+if [ -n "$TELEGRAM_PORT" ]; then
+  CUSTOM_ARGS="${CUSTOM_ARGS} --http-port=$TELEGRAM_PORT"
+else
+  CUSTOM_ARGS="${CUSTOM_ARGS} --http-port=8081"
+fi
 
 if [ -n "$TELEGRAM_STAT" ]; then
   CUSTOM_ARGS="${CUSTOM_ARGS} --http-stat-port=8082"
