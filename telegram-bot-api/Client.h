@@ -63,7 +63,7 @@ class Client final : public WebhookActor::Callback {
   template <class T>
   using object_ptr = td_api::object_ptr<T>;
 
-  static constexpr bool USE_MESSAGE_DATABASE = false;
+  static constexpr bool USE_MESSAGE_DATABASE = true;
 
   static constexpr int32 GENERAL_FORUM_TOPIC_ID = 1;
 
