@@ -10261,8 +10261,8 @@ void Client::on_update_authorization_state() {
       auto request = make_object<td_api::setTdlibParameters>();
       request->use_test_dc_ = is_test_dc_;
       request->database_directory_ = dir_;
-      //request->use_file_database_ = false;
-      //request->use_chat_info_database_ = false;
+      request->use_file_database_ = true;
+      request->use_chat_info_database_ = true;
       //request->use_secret_chats_ = false;
       request->use_message_database_ = USE_MESSAGE_DATABASE;
       request->api_id_ = parameters_->api_id_;
