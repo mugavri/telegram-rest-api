@@ -125,6 +125,7 @@ class Client final : public WebhookActor::Callback {
   class JsonLinkPreviewOptions;
   class JsonAnimation;
   class JsonAudio;
+  class JsonAudios;
   class JsonDocument;
   class JsonPhotoSize;
   class JsonPhoto;
@@ -133,6 +134,7 @@ class Client final : public WebhookActor::Callback {
   class JsonMaskPosition;
   class JsonSticker;
   class JsonStickers;
+  class JsonVideoQuality;
   class JsonVideo;
   class JsonVideoNote;
   class JsonVoiceNote;
@@ -193,6 +195,8 @@ class Client final : public WebhookActor::Callback {
   class JsonChatBoostUpdated;
   class JsonChatBoostRemoved;
   class JsonChatBoosts;
+  class JsonChatOwnerChanged;
+  class JsonChatOwnerLeft;
   class JsonForumTopicCreated;
   class JsonForumTopicEdited;
   class JsonForumTopicInfo;
@@ -278,6 +282,7 @@ class Client final : public WebhookActor::Callback {
   class TdOnAuthorizationQueryCallback;
   class TdOnInitCallback;
   class TdOnGetUserProfilePhotosCallback;
+  class TdOnGetUserProfileAudiosCallback;
   class TdOnSendMessageCallback;
   class TdOnReturnBusinessMessageCallback;
   class TdOnSendMessageAlbumCallback;
@@ -605,7 +610,14 @@ class Client final : public WebhookActor::Callback {
 
   static td::Result<InputReplyParameters> get_reply_parameters(td::JsonValue &&value);
 
+  static td::Result<object_ptr<td_api::ButtonStyle>> get_button_style(td::Result<td::string> r_style);
+
+  static td::Result<object_ptr<td_api::KeyboardButtonType>> get_keyboard_button_type(td::JsonObject &object);
+
   static td::Result<object_ptr<td_api::keyboardButton>> get_keyboard_button(td::JsonValue &button);
+
+  static td::Result<object_ptr<td_api::InlineKeyboardButtonType>> get_inline_keyboard_button_type(
+      td::JsonObject &object, BotUserIds &bot_user_ids);
 
   static td::Result<object_ptr<td_api::inlineKeyboardButton>> get_inline_keyboard_button(td::JsonValue &button,
                                                                                          BotUserIds &bot_user_ids);
@@ -887,6 +899,8 @@ class Client final : public WebhookActor::Callback {
   td::Status process_set_my_default_administrator_rights_query(PromisedQueryPtr &query);
   td::Status process_get_my_name_query(PromisedQueryPtr &query);
   td::Status process_set_my_name_query(PromisedQueryPtr &query);
+  td::Status process_set_my_profile_photo_query(PromisedQueryPtr &query);
+  td::Status process_remove_my_profile_photo_query(PromisedQueryPtr &query);
   td::Status process_get_my_description_query(PromisedQueryPtr &query);
   td::Status process_set_my_description_query(PromisedQueryPtr &query);
   td::Status process_get_my_short_description_query(PromisedQueryPtr &query);
@@ -894,6 +908,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_get_chat_menu_button_query(PromisedQueryPtr &query);
   td::Status process_set_chat_menu_button_query(PromisedQueryPtr &query);
   td::Status process_get_user_profile_photos_query(PromisedQueryPtr &query);
+  td::Status process_get_user_profile_audios_query(PromisedQueryPtr &query);
   td::Status process_send_message_query(PromisedQueryPtr &query);
   td::Status process_send_animation_query(PromisedQueryPtr &query);
   td::Status process_send_audio_query(PromisedQueryPtr &query);
@@ -1189,6 +1204,7 @@ class Client final : public WebhookActor::Callback {
     object_ptr<td_api::businessInfo> business_info;
     object_ptr<td_api::acceptedGiftTypes> accepted_gift_types;
     object_ptr<td_api::userRating> rating;
+    object_ptr<td_api::audio> first_profile_audio;
     int64 personal_chat_id = 0;
     int64 paid_message_star_count = 0;
 
@@ -1210,6 +1226,7 @@ class Client final : public WebhookActor::Callback {
     bool is_premium = false;
     bool added_to_attachment_menu = false;
     bool has_topics = false;
+    bool allows_users_to_create_topics = false;
   };
   static void add_user(UserInfo *user_info, object_ptr<td_api::user> &&user);
   UserInfo *add_user_info(int64 user_id);
@@ -1415,6 +1432,8 @@ class Client final : public WebhookActor::Callback {
   static void json_store_permissions(td::JsonObjectScope &object, const td_api::chatPermissions *permissions);
 
   static void json_store_user_status(td::JsonObjectScope &object, const td_api::UserStatus *userStatus);
+
+  static void json_store_rarity(td::JsonObjectScope &object, const td_api::UpgradedGiftAttributeRarity *rarity);
 
   void remove_replies_to_message(int64 chat_id, int64 reply_to_message_id, bool only_from_cache);
 

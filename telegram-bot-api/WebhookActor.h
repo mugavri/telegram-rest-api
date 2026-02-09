@@ -78,22 +78,24 @@ class WebhookActor final : public td::HttpOutboundConnection::Callback {
   static std::atomic<td::uint64> total_connection_count_;
 
   td::ActorShared<Callback> callback_;
-  td::int64 tqueue_id_;
+  const td::int64 tqueue_id_;
   bool tqueue_empty_ = false;
   std::size_t last_pending_update_count_ = MIN_PENDING_UPDATES_WARNING;
+
   td::HttpUrl url_;
+  td::string host_header_;
   const td::string cert_path_;
   std::shared_ptr<const ClientParameters> parameters_;
 
   double last_error_time_ = 0;
   td::string last_error_message_ = "<none>";
 
-  bool fix_ip_address_ = false;
+  const bool fix_ip_address_ = false;
 
   bool stop_flag_ = false;
 
   bool was_checked_ = false;
-  bool from_db_flag_ = false;
+  const bool from_db_flag_ = false;
 
   class Update {
    public:
@@ -168,8 +170,8 @@ class WebhookActor final : public td::HttpOutboundConnection::Callback {
   td::Container<td::ActorOwn<>> pending_sockets_;
   td::vector<td::BufferedFd<td::SocketFd>> ready_sockets_;
 
-  td::int32 max_connections_ = 0;
-  td::string secret_token_;
+  const td::int32 max_connections_ = 0;
+  const td::string secret_token_;
   td::Container<Connection> connections_;
   td::ListNode ready_connections_;
   td::FloodControlFast active_new_connection_flood_;
