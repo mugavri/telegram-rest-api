@@ -1,241 +1,863 @@
-# TDLight Telegram Bot API
-The official documentation is [here](https://tdlight-team.github.io/tdlight-telegram-bot-api/).
+# Telegram Rest API
 
-TDLight Telegram Bot API is an actively enhanced fork of the original Bot API, featuring experimental user support, proxies, unlimited files size, and more.
+A REST API server for Telegram, based on a fork of [TDLight Telegram Bot API](https://github.com/tdlight-team/tdlight-telegram-bot-api). Features 35+ extended API methods, user mode support, proxy management, message analytics, and more.
 
-TDLight Telegram Bot API is 100% compatible with the official version.
-
-The Telegram Bot API provides an HTTP API for creating [Telegram Bots](https://core.telegram.org/bots).
-
-If you've got any questions about bots or would like to report an issue with your bot, kindly contact [@BotSupport](https://t.me/BotSupport) in Telegram.
-
-If you've got any questions about our fork, instead, join [@TDLightChat](https://t.me/TDLightChat) in Telegram, or see the news at [@TDLight](https://t.me/TDLight).
-
-Please note that only TDLight-specific issues are suitable for this repository.
+Built on top of **TDLib 1.8.61** — fully compatible with the official [Telegram Bot API](https://core.telegram.org/bots/api).
 
 ## Table of Contents
-- [TDLight Bot API features](#tdlight-features)
-    - [Added features](#added-features)
-      - [Added API Methods](#added-api-methods)
-      - [Added Command Line Parameters](#added-command-line-parameters)
-    - [Modified features](#modified-features)
-    - [User Mode](#user-mode)
+- [What's Different](#whats-different)
+- [Added API Methods](#added-api-methods)
+  - [General Methods (Bot & User)](#general-methods-bot--user)
+  - [Proxy Management](#proxy-management)
+  - [User-Mode Methods](#user-mode-methods)
+- [Modified Features](#modified-features)
+  - [Modified Methods](#modified-methods)
+  - [Extended Objects](#extended-objects)
+- [User Mode](#user-mode)
+- [Command Line Parameters](#command-line-parameters)
+- [Docker & Environment Variables](#docker--environment-variables)
 - [Installation](#installation)
 - [Dependencies](#dependencies)
 - [Usage](#usage)
 - [Documentation](#documentation)
-- [Moving a bot to a local server](#switching)
-- [Moving a bot from one local server to another](#moving)
+- [Moving a Bot to a Local Server](#switching)
+- [Moving a Bot Between Local Servers](#moving)
 - [License](#license)
 
-<a name="tdlight-features"></a>
-## TDLight Bot API features
+---
 
-<a name="added-features"></a>
-### Added features
+<a name="whats-different"></a>
+## What's Different
+
+| Feature | Official Bot API | This Fork |
+|---------|-----------------|-----------|
+| User mode (userbots) | No | Yes |
+| Proxy management API | No | Yes (MTProto, SOCKS5, HTTP) |
+| Custom API methods | None | 35+ new methods |
+| Message database | No | Yes (local caching) |
+| Extended statistics | Basic | Enhanced (message stats, graphs, public forwards) |
+| Extended objects | Standard | Extra fields on Message, Chat, User, ChatMember |
+| Invite link analytics | Limited | Comprehensive |
+| Message range deletion | No | Yes |
+
+---
 
 <a name="added-api-methods"></a>
-##### Method `getMessageInfo`
-Get information about a message
-###### Parameters
-- `chat_id` Message chat id
-- `message_id` Message id
-###### Returns `message`
+## Added API Methods
 
- Document the following methods:
-##### Method `getParticipants`
-Get the member list of a supergroup or channel
-###### Parameters
-- `chat_id` Chat id
-- `filter` String, possible values are
-    `members`, `parameters`, `admins`, `administators`, `restricted`, `banned`, `bots`
-- `offset` Number of users to skip
-- `limit` The maximum number of users be returned; up to 200
+<a name="general-methods-bot--user"></a>
+### General Methods (Bot & User)
 
-###### Returns `ChatMember`
+These methods work for both bot tokens and user tokens.
 
-###### Parameters
-- `chat_id` Chat id
-- `start` First message id to delete
-- `end` Last message id to delete
-###### Returns `true`
+---
 
-##### Command `ping`
-Send an MTProto ping message to the telegram servers.
-Useful to detect the delay of the bot api server.
+#### `getMessageInfo`
+Get information about a specific message.
 
-###### Parameters
-No parameters
-###### Returns `string`
-Ping delay in seconds represented as string.
+**Access:** Bot & User
 
-<!--TODO:
-#### Command `toggleGroupInvites`
-(todo)
-##### Parameters
-- `(todo)`
-##### Returns `(todo)`
--->
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message identifier |
 
-<a name="added-command-line-parameters"></a>
-#### Added Command Line Parameters
-##### Flag `--relative`
-If enabled, allow only relative paths for files in local mode.
+**Returns:** `Message` object
 
-##### Flag `--insecure`
-Allow http connection in non-local mode
+---
 
-##### Flag `--max-batch-operations=<number>`
-maximum number of batch operations (default 10000)
+#### `getMessage`
+Get comprehensive message data including the message itself, its properties, statistics, public forwards, thread info, viewers, and available reactions.
 
-##### Executable parameter `--stats-hide-sensible-data`
-Makes the stats page (if enabled) hide the bot token and the webhook url to no leak user secrets, when served publicly.
+**Access:** Bot & User
 
-##### Executable parameter `--http-idle-timeout`
-HTTP timeout in seconds. Use env `TELEGRAM_HTTP_IDLE_TIMEOUT` for docker. Defaults to 500s
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message identifier |
 
-#### Existing Command Line Parameters
-Which are not properly documented, so they are written down here.
+**Returns:** `fullMessage` object:
 
-##### Flag `-v<number>`/`--verbose=<number>`
-Verbosity of logging.
-The [loglevels](https://github.com/tdlib/td/blob/eb80924dad30af4e6d8385d058bb7e847174df5e/tdutils/td/utils/logging.h#L103-L109) are
-- `0`: Only fatal errors (least noisy)
-- `1`: All errors
-- `2`: Warnings, too
-- `3`: Infos
-- `4`: Debug output (very spammy)
-- `1024`: Also the stuff which is considered to "never" appear (as of writing there's no such stuff).
-_For Docker containers, `$TELEGRAM_VERBOSITY` can be set._
+| Field | Type | Description |
+|-------|------|-------------|
+| `chat_id` | Integer | Chat identifier |
+| `message_id` | Integer | Message identifier |
+| `message` | Message | The full message object |
+| `properties` | Object | Message capability flags (see below) |
+| `statistics` | Object | Message statistics (interaction & reaction graphs) |
+| `public_forwards` | Object | Public forwards (`total_count`, `next_offset`, `forwards[]`) |
+| `thread_info` | Object | Thread information (if applicable) |
+| `thread_messages` | Array of Message | Thread messages (if applicable) |
+| `viewers` | Array of Object | Message viewers (`user`, `date`) |
+| `available_reactions` | Object | Available reactions for this message |
+
+**Properties fields:**
+`can_add_tasks`, `can_be_copied`, `can_be_copied_to_secret_chat`, `can_be_deleted_only_for_self`, `can_be_deleted_for_all_users`, `can_be_edited`, `can_be_forwarded`, `can_be_paid`, `can_be_pinned`, `can_be_replied`, `can_be_replied_in_another_chat`, `can_be_saved`, `can_be_shared_in_story`, `can_edit_media`, `can_edit_scheduling_state`, `can_get_author`, `can_get_embedding_code`, `can_get_link`, `can_get_media_timestamp_links`, `can_get_message_thread`, `can_get_read_date`, `can_get_statistics`, `can_get_video_advertisements`, `can_get_viewers`, `can_mark_tasks_as_done`, `can_recognize_speech`, `can_report_chat`, `can_report_reactions`, `can_report_supergroup_spam`, `can_set_fact_check`, `need_show_statistics`
+
+---
+
+#### `getParticipants`
+Get the member list of a supergroup or channel.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `filter` | String | No | Filter type: `members`, `admins`, `administrators`, `restricted`, `banned`, `bots` |
+| `offset` | Integer | No | Number of users to skip |
+| `limit` | Integer | No | Max number of users to return (up to 200) |
+
+**Returns:** Array of `ChatMember` objects
+
+---
+
+#### `deleteMessages`
+Delete messages in a range. Works on supergroups only.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `start` | Integer | Yes | First message ID in range |
+| `end` | Integer | Yes | Last message ID in range |
+
+`start` must be less than `end`. Both must be positive non-zero numbers.
+Max messages per call is determined by `--max-batch-operations` (default 10000). Recommended: no more than 200 per call.
+
+**Returns:** `true` (always, even if some messages couldn't be deleted)
+
+---
+
+#### `ping`
+Send an MTProto ping to Telegram servers. Useful for measuring latency.
+
+**Access:** Bot & User
+
+**Parameters:** None
+
+**Returns:** Ping delay in seconds as `string`
+
+---
+
+<a name="proxy-management"></a>
+### Proxy Management
+
+These methods work for both bot tokens and user tokens.
+
+---
+
+#### `getProxies`
+Get all configured proxies.
+
+**Access:** Bot & User
+
+**Parameters:** None
+
+**Returns:** Array of proxy objects
+
+---
+
+#### `addProxy`
+Add a new proxy.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `server` | String | Yes | Proxy server address |
+| `port` | Integer | Yes | Proxy port (1–65535) |
+| `type` | String | Yes | Proxy type: `mtproto`, `socks5`, or `http` |
+| `secret` | String | MTProto only | Proxy secret (required for `mtproto` type) |
+| `username` | String | No | Username (for `socks5` and `http`) |
+| `password` | String | No | Password (for `socks5` and `http`) |
+| `http_only` | Boolean | No | HTTP-only mode (for `http` type) |
+
+**Returns:** Added proxy object
+
+---
+
+#### `deleteProxy`
+Delete a proxy by ID.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `proxy_id` | Integer | Yes | Proxy identifier |
+
+**Returns:** `true` on success
+
+---
+
+#### `enableProxy`
+Enable a specific proxy.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `proxy_id` | Integer | Yes | Proxy identifier |
+
+**Returns:** `true` on success
+
+---
+
+#### `disableProxy`
+Disable all proxies.
+
+**Access:** Bot & User
+
+**Parameters:** None
+
+**Returns:** `true` on success
+
+---
+
+<a name="user-mode-methods"></a>
+### User-Mode Methods
+
+These methods require [User Mode](#user-mode) — they only work with user tokens (`/user{token}/`).
+
+---
+
+#### `getChats`
+Get the main chat list.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `limit` | Integer | No | Max number of chats (default 100, max 100) |
+
+**Returns:** Array of chat objects
+
+---
+
+#### `getCommonChats`
+Get chats in common with another user.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `user_id` | Integer | Yes | User identifier |
+| `offset_chat_id` | Integer | No | Chat ID to offset from (default 0) |
+| `limit` | Integer | No | Max number of chats (default 100, max 100) |
+
+**Returns:** Array of chat objects
+
+---
+
+#### `getInactiveChats`
+Get inactive supergroup and channel chats.
+
+**Access:** User only
+
+**Parameters:** None
+
+**Returns:** Array of chat objects
+
+---
+
+#### `searchPublicChats`
+Search for public chats by query.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | String | Yes | Search query |
+
+**Returns:** Array of chat objects
+
+---
+
+#### `getChatSimilarChats`
+Get chats similar to a given chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+
+**Returns:** Array of chat objects
+
+---
+
+#### `joinChat`
+Join a chat by ID or invite link.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | No* | Chat identifier |
+| `invite_link` | String | No* | Invite link |
+
+*At least one of `chat_id` or `invite_link` must be provided.
+
+**Returns:** `true` on success
+
+---
+
+#### `addChatMembers`
+Add a member to a chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `user_id` | Integer | Yes | User to add |
+
+**Returns:** `true` on success
+
+---
+
+#### `createChat`
+Create a new chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | String | Yes | Chat type: `supergroup`, `channel`, or `group` |
+| `title` | String | Yes | Chat title |
+| `description` | String | No | Chat description |
+| `message_auto_delete_time` | Integer | No | Auto-delete timer in seconds (default 0) |
+| `user_ids` | Array of Integer | Group only | User IDs to add (required for `group` type) |
+
+**Returns:** Chat object
+
+---
+
+#### `deleteChatHistory`
+Delete the entire chat history.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `for_everyone` | Boolean | No | Delete for all members |
+| `remove_from_chat_list` | Boolean | No | Also remove from chat list |
+
+**Returns:** `true` on success
+
+---
+
+#### `votePoll`
+Vote on a poll.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message containing the poll |
+| `option_ids` | Array of Integer | Yes | Option IDs to vote for |
+
+**Returns:** `true` on success
+
+---
+
+#### `getCallbackQueryAnswer`
+Get the answer to a callback query (simulate pressing an inline button).
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message identifier |
+| `callback_data` | String | Yes | Callback data from the button |
+
+**Returns:** Callback query answer object
+
+---
+
+#### `searchMessages`
+Search for messages across all chats.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | String | Yes | Search query |
+| `offset` | String | No | Offset for pagination |
+| `filter` | String | No | Message type filter (see [filter values](#filter-values)) |
+| `min_date` | Integer | No | Min date (unix timestamp) |
+| `max_date` | Integer | No | Max date (unix timestamp) |
+| `chat_filter` | String | No | Chat type: `private`, `group`, or `channel` |
+
+**Returns:** Array of messages
+
+---
+
+#### `searchChatMessages`
+Search for messages within a specific chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `query` | String | No | Search query |
+| `sender_user_id` | Integer | No | Filter by sender |
+| `from_message_id` | Integer | No | Start searching from this message ID |
+| `filter` | String | No | Message type filter (see [filter values](#filter-values)) |
+
+**Returns:** Array of messages
+
+---
+
+#### `getMessages`
+Get multiple messages by their IDs.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_ids` | Array of Integer | Yes | Message IDs (max 500) |
+
+**Returns:** Array of messages
+
+---
+
+#### `getScheduledMessages`
+Get scheduled messages in a chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+
+**Returns:** Array of scheduled messages
+
+---
+
+#### `editMessageScheduling`
+Edit the scheduling of a scheduled message.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Scheduled message ID |
+| `send_at` | String/Integer | Yes | New send time: unix timestamp, or `"online"` to send when recipient comes online |
+| `repeat_period` | Integer | No | Repeat period in seconds (0–31536000) |
+
+**Returns:** `true` on success
+
+---
+
+#### `getMessagePublicForwards`
+Get public forwards of a channel message.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message identifier |
+| `offset` | String | No | Offset for pagination |
+| `limit` | Integer | No | Max results (default 100, max 100) |
+
+**Returns:** Array of messages
+
+---
+
+#### `getMessageStatistics`
+Get statistics for a specific message.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `message_id` | Integer | Yes | Message identifier |
+
+**Returns:** Message statistics object
+
+---
+
+#### `getChatStatistics`
+Get statistics for a chat.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `is_dark` | Boolean | No | Use dark theme for graphs |
+
+**Returns:** Chat statistics object
+
+---
+
+#### `getStatisticalGraph`
+Get a statistical graph by its token.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer | No | Chat identifier (default 0) |
+| `token` | String | Yes | Graph token (from statistics response) |
+| `x` | Integer | No | X-axis zoom value (default 0) |
+
+**Returns:** Statistical graph object
+
+---
+
+#### `getChatMessageCalendar`
+Get a calendar of message counts by date.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `topic` | String | No | Topic filter: `thread`, `forum`, `direct_messages`, or `saved_messages` |
+| `topic_id` | Integer | Required with `topic` | Topic ID |
+| `filter` | String | No | Message type filter (see [filter values](#filter-values)) |
+| `from_message_id` | Integer | No | Start from this message ID |
+
+**Returns:** Message calendar object
+
+---
+
+#### `getChatMessageByDate`
+Get the first message on or after a specific date.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `date` | Integer | Yes | Unix timestamp |
+
+**Returns:** `Message` object
+
+---
+
+#### `setSupergroupUsername`
+Set or remove the username of a supergroup.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Supergroup identifier |
+| `username` | String | Yes | New username (empty to remove) |
+
+**Returns:** `true` on success
+
+---
+
+#### Chat Invite Link Methods
+
+##### `getChatInviteLink`
+Get details of a specific invite link.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `invite_link` | String | Yes | The invite link |
+
+**Returns:** Invite link object
+
+##### `getChatInviteLinks`
+Get all invite links created by a specific user.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `creator_user_id` | Integer | Yes | Creator's user ID |
+| `is_revoked` | Boolean | No | Filter revoked links only |
+| `offset_date` | Integer | No | Offset date for pagination |
+| `offset_invite_link` | String | No | Offset invite link for pagination |
+| `limit` | Integer | No | Max results (default 100, max 100) |
+
+**Returns:** Array of invite link objects
+
+##### `getChatInviteLinkCounts`
+Get invite link counts by creator.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+
+**Returns:** Array of invite link count objects
+
+##### `getChatInviteLinkMembers`
+Get members who joined via a specific invite link.
+
+**Access:** User only
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+| `invite_link` | String | Yes | The invite link |
+| `only_with_expired_subscription` | Boolean | No | Filter expired subscriptions only |
+| `offset_date` | Integer | No | Offset date for pagination |
+| `limit` | Integer | No | Max results (default 100, max 100) |
+
+**Returns:** Array of chat invite link member objects
+
+##### `getChatInviteLinksFullData`
+Get comprehensive invite link data for a chat.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `chat_id` | Integer/String | Yes | Chat identifier |
+
+**Returns:** Full invite link data object
+
+##### `checkChatInviteLink`
+Verify an invite link without joining.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `invite_link` | String | Yes | The invite link to check |
+
+**Returns:** Invite link info object
+
+---
+
+<a name="filter-values"></a>
+### Filter Values
+
+The `filter` parameter used in search methods accepts the following values:
+
+| Value | Description |
+|-------|-------------|
+| *(empty)* | No filter (all messages) |
+| `animation` | GIF animations |
+| `audio` | Audio files |
+| `chat_photo` | Chat photo changes |
+| `document` | Documents (files) |
+| `failed_to_send` | Failed messages |
+| `mention` | Messages with mentions |
+| `photo` | Photos |
+| `photo_and_video` | Photos and videos |
+| `pinned` | Pinned messages |
+| `unread_mention` | Unread mentions |
+| `url` | Messages with URLs |
+| `video` | Videos |
+| `video_note` | Video notes (round videos) |
+| `voice_and_video_note` | Voice and video notes |
+| `voice_note` | Voice messages |
+
+---
 
 <a name="modified-features"></a>
-#### Modified features
+## Modified Features
 
-##### Method `getChat`
-The command `getChat` will also try to resolve the username online, if it can't be found locally
+<a name="modified-methods"></a>
+### Modified Methods
 
-##### Method `deleteMessages`
-The command `deleteMessages` can also delete all the messages with message_id in range between `start` and `end`.  
-The `start` parameter MUST be less than the `end` parameter  
-Both `start` and `end` must be positive non-zero numbers  
-The method will always return `true` as a result, even if the messages cannot be deleted  
-This method does not work on private chat or normal groups
-It is not suggested to delete more than 200 messages per call
+#### `getChat`
+Now also resolves usernames online if they can't be found locally.
 
-**NOTE**  
-The maximum number of messages to be deleted in a single batch is determined by the `max-batch-operations` parameter and is 10000 by default
+#### `deleteMessages`
+Extended with range deletion support (see [deleteMessages](#deletemessages) above).
 
-##### Object `Message`
-The `Message` object now has two new fields:
-- `views`: how many views has the message (usually the views are shown only for channel messages)
-- `forwards`: how many times the message has been forwarded
+---
 
-##### Object `ChatMember`
-The `ChatMember` object now has two new fields:
-- `joined_date`: integer, unix timestamp, when has the user joined
-- `inviter`: `User`, the inviter
+<a name="extended-objects"></a>
+### Extended Objects
 
-##### Object `Chat`
-The `Chat` object now has two new fields:
-- `is_verified`: bool, optional, default false. Is the chat verified by Telegram, clients show a verified batch
-- `is_scam`: bool, optional, default false. Is the chat reported for scam, clients show a warning to the user
+#### `Message`
+| New Field | Type | Description |
+|-----------|------|-------------|
+| `views` | Integer | View count (typically for channel messages) |
+| `forwards` | Integer | Forward count |
+| `interaction_info` | Object | Detailed interaction data (see below) |
 
-##### Object `User`
-The `User` object now has two new fields:
-- `is_verified`: bool, optional, default false. Is the user verified by Telegram, clients show a verified batch
-- `is_scam`: bool, optional, default false. Is the user reported for scam, clients show a warning to the user
+**`interaction_info` fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `count.views` | Integer | View count |
+| `count.forwards` | Integer | Forward count |
+| `count.replies` | Integer | Reply count |
+| `count.reactions` | Integer | Reaction count |
+| `reactions_info.are_tags` | Boolean | Whether reactions are used as tags |
+| `reactions_info.can_get_added_reactions` | Boolean | Whether the reaction list can be fetched |
+| `reactions_info.reactions` | Array | Array of reactions (`type`, `total_count`, `is_chosen`) |
 
-In addition, the member list now shows the full bot list (previously only the bot that executed the query was shown)
+#### `ChatMember`
+| New Field | Type | Description |
+|-----------|------|-------------|
+| `joined_date` | Integer | Unix timestamp of when the user joined |
+| `inviter` | User | The user who invited this member |
 
-The bot will now receive Updates for all received media, even if a destruction timer is set.
+The member list now shows **all bots** in the chat (not just the querying bot).
+
+#### `Chat`
+| New Field | Type | Description |
+|-----------|------|-------------|
+| `is_verified` | Boolean | Whether the chat is verified by Telegram |
+| `is_scam` | Boolean | Whether the chat is flagged as scam |
+| `is_fake` | Boolean | Whether the chat is flagged as fake |
+| `status` | String | Current user's status in the chat (supergroups/channels only): `creator`, `administrator`, `member`, `restricted`, `left`, `kicked` |
+
+#### `User`
+| New Field | Type | Description |
+|-----------|------|-------------|
+| `is_verified` | Boolean | Whether the user is verified by Telegram |
+| `is_scam` | Boolean | Whether the user is flagged as scam |
+| `is_fake` | Boolean | Whether the user is flagged as fake |
+| `user_status` | String | User's online status: `online`, `recently`, `offline`, `week`, `month`, `empty` |
+| `last_seen` | Integer | Unix timestamp of last seen time (only when `user_status` is `offline`) |
+| `is_deleted` | Boolean | Whether the account is deleted |
+
+**Other changes:**
+- The bot now receives updates for all media, even if a self-destruct timer is set.
+
+---
 
 <a name="user-mode"></a>
-### User Mode
+## User Mode
 
-You can allow user accounts to access the bot api with the command-line option `--allow-users` or set the env variable
-`TELEGRAM_ALLOW_USERS` to `1` when using docker. User Mode is disabled by default, so only bots can access the api.
+User mode allows user accounts (not just bots) to access the API. Disabled by default.
 
-You can now log into the bot api with user accounts to create userbots running on your account.
+**Enable with:** `--allow-users` flag or `TELEGRAM_ALLOW_USERS=1` environment variable.
 
-Note: Never send your 2fa password over a plain http connection. Make sure https is enabled or use this api locally.
+> **Security:** Never send your 2FA password over plain HTTP. Use HTTPS or run the API locally.
 
-#### User Authorization Process
-1. Send a request to `{api_url}/userlogin`
+### Authorization Flow
 
-   Parameters:
-   - `phone_number`: `string`. The phone number of your Telegram Account.
+**Step 1.** Request a login code:
+```
+POST {api_url}/userlogin
+```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `phone_number` | String | Your Telegram phone number |
 
-   Returns your `user_token` as `string`. You can use this just like a normal bot token on the `/user` endpoint
+Returns your `user_token` as a string.
 
-2. Send the received code to `{api_url}/user{user_token}/authcode`
+**Step 2.** Submit the code:
+```
+POST {api_url}/user{user_token}/authcode
+```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `code` | Integer | Code sent by Telegram |
 
-   Parameters:
-   - `code`: `int`. The code send to you by Telegram In-App or by SMS
+**Step 3.** *(Optional)* Submit 2FA password:
+```
+POST {api_url}/user{user_token}/2fapassword
+```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `password` | String | 2FA password |
 
-   Will send `{"ok": true, "result": true}` on success.
+**Step 4.** *(Optional)* Register new account (requires `--allow-users-registration`):
+```
+POST {api_url}/user{user_token}/registerUser
+```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `first_name` | String | First name |
+| `last_name` | String | *(Optional)* Last name |
 
-3. Optional: Send your 2fa password to `{api_url}/user{user_token}/2fapassword`
+### Using User Mode
+Replace `/bot{token}/` with `/user{token}/` in all API URLs. You only need to authenticate once — the session persists until you call `logOut`.
 
-   Parameters:
-   - `password`: `string`. Password for 2fa authentication
+Multiple user tokens can be active simultaneously on the same server.
 
-   Will send `{"ok": true, "result": true}` on success.
+### Unavailable Methods in User Mode
+These bot-only methods are not available for user accounts:
+`answerCallbackQuery`, `setMyCommands`, `editMessageReplyMarkup`, `uploadStickerFile`, `createNewStickerSet`, `addStickerToSet`, `setStickerPositionInSet`, `deleteStickerFromSet`, `setStickerSetThumb`, `sendInvoice`, `answerShippingQuery`, `answerPreCheckoutQuery`, `setPassportDataErrors`, `sendGame`, `setGameScore`, `getGameHighscores`
 
-4. Optional: Register the user by calling `{api_url}/user{user_token}/registerUser`.
+User accounts also cannot attach `reply_markup` to messages. Command entities may not be generated in chats without bots.
 
-   User registration is disabled by default. You can enable it with the `--allow-users-registration` command line
-   option or the env variable `TELEGRAM_ALLOW_USERS_REGISTRATION` set to `1` when using docker.
+---
 
-   Parameters:
-   - `first_name`: `string`. First name for the new account.
-   - `last_name`: `string`, optional. Last name for the new account.
+<a name="command-line-parameters"></a>
+## Command Line Parameters
 
-   Will send `{"ok": true, "result": true}` on success.
+### Added Parameters
 
-You are now logged in and can use all methods like in the bot api, just replace the
-`/bot{bot_token}/` in your urls with `/user{token}/`.
+| Parameter | Description |
+|-----------|-------------|
+| `--allow-users` | Enable user account authentication |
+| `--allow-users-registration` | Enable user account registration |
+| `--relative` | Allow only relative file paths in local mode |
+| `--insecure` | Allow HTTP connections in non-local mode |
+| `--max-batch-operations=<N>` | Max batch operations per call (default 10000) |
+| `--stats-hide-sensible-data` | Hide bot token and webhook URL on the stats page |
+| `--http-idle-timeout=<seconds>` | HTTP idle timeout (default 500s) |
 
-You only need to authenticate once, the account will stay logged in. You can use the `logOut` method to log out
-or simply close the session in your account settings.
+### Standard Parameters
 
-Some methods are (obviously) not available as a user. This includes:
-- `answerCallbackQuery`
-- `setMyCommands`
-- `editMessageReplyMarkup`
-- `uploadStickerFile`
-- `createNewStickerSet`
-- `addStickerToSet`
-- `setStickerPositionInSet`
-- `deleteStickerFromSet`
-- `setStickerSetThumb`
-- `sendInvoice`
-- `answerShippingQuery`
-- `answerPreCheckoutQuery`
-- `setPassportDataErrors`
-- `sendGame`
-- `setGameScore`
-- `getGameHighscores`
+| Parameter | Description |
+|-----------|-------------|
+| `--api-id=<ID>` | Telegram API ID *(required)* |
+| `--api-hash=<HASH>` | Telegram API hash *(required)* |
+| `--local` | Enable local mode (unlimited downloads, 2GB uploads, file URIs, etc.) |
+| `--http-port=<PORT>` | HTTP port (default 8081) |
+| `-v<N>` / `--verbose=<N>` | Log verbosity: `0` fatal, `1` errors, `2` warnings, `3` info, `4` debug |
 
-It is also not possible to attach a `reply_markup` to any message.
+---
 
-Your api wrapper may behave different in
-some cases, for examples command message-entities are not created in chats that don't contain any
-bots, so your Command Handler may not detect it.
+<a name="docker--environment-variables"></a>
+## Docker & Environment Variables
 
-It is possible to have multiple user-tokens to multiple client instances on the same bot api server.
+### Quick Start
+```bash
+docker run -p 8081:8081 \
+  --env TELEGRAM_API_ID=YOUR_API_ID \
+  --env TELEGRAM_API_HASH=YOUR_API_HASH \
+  tdlight/tdlightbotapi
+```
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_API_ID` | *(Required)* Telegram API ID |
+| `TELEGRAM_API_HASH` | *(Required)* Telegram API hash |
+| `TELEGRAM_WORK_DIR` | Working directory |
+| `TELEGRAM_TEMP_DIR` | Temporary directory |
+| `TELEGRAM_PORT` | API port (default 8081) |
+| `TELEGRAM_STAT` | Enable stats port |
+| `TELEGRAM_STAT_HIDE_SENSIBLE_DATA` | Hide sensitive data in stats |
+| `TELEGRAM_ALLOW_USERS` | Enable user mode (`1`) |
+| `TELEGRAM_ALLOW_USERS_REGISTRATION` | Enable user registration (`1`) |
+| `TELEGRAM_LOCAL` | Enable local mode |
+| `TELEGRAM_NO_FILE_LIMIT` | Remove file size limits |
+| `TELEGRAM_INSECURE` | Allow HTTP in non-local mode |
+| `TELEGRAM_RELATIVE` | Use relative file paths |
+| `TELEGRAM_MAX_BATCH` | Max batch operations |
+| `TELEGRAM_HTTP_IDLE_TIMEOUT` | HTTP idle timeout in seconds |
+| `TELEGRAM_MAX_CONNECTIONS` | Max connections |
+| `TELEGRAM_MAX_WEBHOOK_CONNECTIONS` | Max webhook connections |
+| `TELEGRAM_VERBOSITY` | Log verbosity level |
+| `TELEGRAM_PROXY` | Proxy configuration |
+| `TELEGRAM_FILTER` | Event filter |
+| `TELEGRAM_LOGS` | Log output path |
+
+---
 
 <a name="installation"></a>
 ## Installation
 
-The simplest way to use it is with this docker command:
-```bash
-docker run -p 8081:8081 --env TELEGRAM_API_ID=API_ID --env TELEGRAM_API_HASH=API_HASH tdlight/tdlightbotapi
-```
-
-The simplest way to build `Telegram Bot API server` is to use our [Telegram Bot API server build instructions generator](https://tdlight-team.github.io/tdlight-telegram-bot-api/build.html).
-If you do that, you'll only need to choose the target operating system to receive the complete build instructions.
-
-In general, you need to install all `Telegram Bot API server` [dependencies](#dependencies) and compile the source code using CMake:
+### Build from Source
 
 ```bash
 git clone --recursive https://github.com/tdlight-team/tdlight-telegram-bot-api
@@ -246,74 +868,67 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 cmake --build . --target install
 ```
 
-If you forgot that `--recursive` flag at the clone part, you can just navigate into that created folder and run
+If you forgot `--recursive`:
 ```bash
-cd tdlight-telegram-bot-api
 git submodule update --init --recursive
 ```
 
 <a name="dependencies"></a>
 ## Dependencies
-To build and run `Telegram Bot API server` you will need:
 
-* OpenSSL
-* zlib
-* C++17 compatible compiler (e.g., Clang 5.0+, GCC 7.0+, MSVC 19.1+ (Visual Studio 2017.7+), Intel C++ Compiler 19+) (build only)
-* gperf (build only)
-* CMake (3.10+, build only)
-* _having it cloned with `--recursive` (see [above](#installation)) to get `tdlib`_
+- OpenSSL
+- zlib
+- C++17 compiler (Clang 5.0+, GCC 7.0+, MSVC 19.1+, Intel C++ 19+)
+- gperf *(build only)*
+- CMake 3.10+ *(build only)*
 
 <a name="usage"></a>
 ## Usage
 
-Use `telegram-bot-api --help` to receive the list of all available options of the Telegram Bot API server.
+```bash
+telegram-bot-api --api-id=YOUR_API_ID --api-hash=YOUR_API_HASH
+```
 
-The only mandatory options are `--api-id` and `--api-hash`. You must obtain your own `api_id` and `api_hash`
-as described in https://core.telegram.org/api/obtaining_api_id and specify them using the `--api-id` and `--api-hash` options
-or the `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` environment variables.
+Use `telegram-bot-api --help` for all available options.
 
-To enable Bot API features not available at `https://api.telegram.org`, specify the option `--local`. In the local mode the Bot API server allows to:
-* Download files without a size limit.
-* Upload files up to 2000 MB.
-* Upload files using their local path and [the file URI scheme](https://en.wikipedia.org/wiki/File_URI_scheme).
-* Use an HTTP URL for the webhook.
-* Use any local IP address for the webhook.
-* Use any port for the webhook.
-* Set *max_webhook_connections* up to 100000.
-* Receive the absolute local path as a value of the *file_path* field without the need to download the file after a *getFile* request.
+In `--local` mode:
+- Download files without size limits
+- Upload files up to 2000 MB
+- Use local file paths and `file://` URIs
+- Use HTTP webhooks
+- Use any local IP/port for webhooks
+- Set `max_webhook_connections` up to 100,000
+- Receive absolute local paths in `file_path`
 
-The Telegram Bot API server accepts only HTTP requests, so a TLS termination proxy needs to be used to handle remote HTTPS requests.
+The server accepts HTTP only — use a TLS termination proxy for HTTPS.
 
-By default the Telegram Bot API server is launched on the port 8081, which can be changed using the option `--http-port`.
+Default port: **8081** (change with `--http-port`).
 
 <a name="documentation"></a>
 ## Documentation
-See [Bots: An introduction for developers](https://core.telegram.org/bots) for a brief description of Telegram Bots and their features.
 
-See the [Telegram Bot API documentation](https://core.telegram.org/bots/api) for a description of the Bot API interface and a complete list of available classes, methods and updates.
-
-See the [Telegram Bot API server build instructions generator](https://tdlib.github.io/telegram-bot-api/build.html) for detailed instructions on how to build the Telegram Bot API server.
-
-Subscribe to [@BotNews](https://t.me/botnews) to be the first to know about the latest updates and join the discussion in [@BotTalk](https://t.me/bottalk).
+- [Telegram Bots Introduction](https://core.telegram.org/bots)
+- [Official Bot API Documentation](https://core.telegram.org/bots/api)
+- [Bot API Server Build Instructions](https://tdlib.github.io/telegram-bot-api/build.html)
+- [@BotNews](https://t.me/botnews) — Bot API updates
+- [@BotTalk](https://t.me/bottalk) — Discussion
 
 <a name="switching"></a>
-## Moving a bot to a local server
+## Moving a Bot to a Local Server
 
-To guarantee that your bot will receive all updates, you must deregister it with the `https://api.telegram.org` server by calling the method [logOut](https://core.telegram.org/bots/api#logout).
-After the bot is logged out, you can replace the address to which the bot sends requests with the address of your local server and use it in the usual way.
-If the server is launched in `--local` mode, make sure that the bot can correctly handle absolute file paths in response to `getFile` requests.
+1. Call [logOut](https://core.telegram.org/bots/api#logout) on `https://api.telegram.org` to deregister
+2. Point your bot to your local server address
+3. If using `--local` mode, ensure your bot handles absolute file paths from `getFile`
 
 <a name="moving"></a>
-## Moving a bot from one local server to another
+## Moving a Bot Between Local Servers
 
-If the bot is logged in on more than one server simultaneously, there is no guarantee that it will receive all updates.
-To move a bot from one local server to another you can use the method [logOut](https://core.telegram.org/bots/api#logout) to log out on the old server before switching to the new one.
-
-If you want to avoid losing updates between logging out on the old server and launching on the new server, you can remove the bot's webhook using the method
-[deleteWebhook](https://core.telegram.org/bots/api#deletewebhook), then use the method [close](https://core.telegram.org/bots/api#close) to close the bot instance.
-After the instance is closed, locate the bot's subdirectory in the working directory of the old server by the bot's user ID, move the subdirectory to the working directory of the new server
-and continue sending requests to the new server as usual.
+1. Call [deleteWebhook](https://core.telegram.org/bots/api#deletewebhook) on the old server
+2. Call [close](https://core.telegram.org/bots/api#close) to close the instance
+3. Move the bot's subdirectory (by user ID) from the old server's working directory to the new one
+4. Resume requests on the new server
 
 <a name="license"></a>
 ## License
-`Telegram Bot API server` source code is licensed under the terms of the Boost Software License. See [LICENSE_1_0.txt](http://www.boost.org/LICENSE_1_0.txt) for more information.
+
+Licensed under the [Boost Software License](http://www.boost.org/LICENSE_1_0.txt).
