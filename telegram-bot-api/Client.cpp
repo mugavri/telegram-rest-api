@@ -4,6 +4,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
+#include "td/telegram/td_api.h"
 #include "telegram-bot-api/Client.h"
 
 #include "telegram-bot-api/ClientParameters.h"
@@ -6209,7 +6210,7 @@ class Client::JsonFoundMessages : public td::Jsonable {
 
 class Client::JsonProxy : public td::Jsonable {
  public:
-  explicit JsonProxy(object_ptr<td_api::proxy> &proxy) : proxy_(proxy) {
+  explicit JsonProxy(object_ptr<td_api::addedProxy> &proxy) : proxy_(proxy) {
   }
 
   void store(td::JsonValueScope *scope) const {
@@ -6217,22 +6218,27 @@ class Client::JsonProxy : public td::Jsonable {
     object("id", proxy_->id_);
     object("last_used_date", proxy_->last_used_date_);
     object("is_enabled", td::JsonBool(proxy_->is_enabled_));
-    object("server", proxy_->server_);
-    object("port", proxy_->port_);
-    switch (proxy_->type_->get_id()) {
+
+
+    auto proxy_info = proxy_->proxy_.get();
+
+    object("server", proxy_info->server_);
+    object("port", proxy_info->port_);
+
+    switch (proxy_info->type_->get_id()) {
       case td_api::proxyTypeSocks5::ID: {
-        auto ptype = static_cast<td_api::proxyTypeSocks5 *>(proxy_->type_.get());
+        auto ptype = static_cast<td_api::proxyTypeSocks5 *>(proxy_info->type_.get());
         object("type", "socks5");
         object("username", ptype->username_);
         object("password", ptype->password_);
       } break;
       case td_api::proxyTypeMtproto::ID: {
-        auto ptype = static_cast<td_api::proxyTypeMtproto *>(proxy_->type_.get());
+        auto ptype = static_cast<td_api::proxyTypeMtproto *>(proxy_info->type_.get());
         object("type", "mtproto");
         object("secret", ptype->secret_);
       } break;
       case td_api::proxyTypeHttp::ID: {
-        auto ptype = static_cast<td_api::proxyTypeHttp *>(proxy_->type_.get());
+        auto ptype = static_cast<td_api::proxyTypeHttp *>(proxy_info->type_.get());
         object("type", "http");
         object("username", ptype->username_);
         object("password", ptype->password_);
@@ -6242,12 +6248,12 @@ class Client::JsonProxy : public td::Jsonable {
   }
 
  private:
-  object_ptr<td_api::proxy> &proxy_;
+  object_ptr<td_api::addedProxy> &proxy_;
 };
 
 class Client::JsonProxiesArray : public td::Jsonable {
  public:
-  explicit JsonProxiesArray(object_ptr<td_api::proxies> &proxies) : proxies_(proxies) {
+  explicit JsonProxiesArray(object_ptr<td_api::addedProxies> &proxies) : proxies_(proxies) {
   }
   void store(td::JsonValueScope *scope) const {
     auto array = scope->enter_array();
@@ -6257,7 +6263,7 @@ class Client::JsonProxiesArray : public td::Jsonable {
   }
 
  private:
-  object_ptr<td_api::proxies> &proxies_;
+  object_ptr<td_api::addedProxies> &proxies_;
 };
 
 //end custom Json objects impl
@@ -9035,8 +9041,8 @@ class Client::TdOnGetProxiesQueryCallback : public TdQueryCallback {
       return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
     }
 
-    CHECK(result->get_id() == td_api::proxies::ID);
-    auto proxies = move_object_as<td_api::proxies>(result);
+    CHECK(result->get_id() == td_api::addedProxies::ID);
+    auto proxies = move_object_as<td_api::addedProxies>(result);
     answer_query(JsonProxiesArray(proxies), std::move(query_));
   }
 
@@ -9055,8 +9061,8 @@ class Client::TdOnAddProxyQueryCallback : public TdQueryCallback {
       return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
     }
 
-    CHECK(result->get_id() == td_api::proxy::ID);
-    auto proxy = move_object_as<td_api::proxy>(result);
+    CHECK(result->get_id() == td_api::addedProxy::ID);
+    auto proxy = move_object_as<td_api::addedProxy>(result);
     answer_query(JsonProxy(proxy), std::move(query_));
   }
 
@@ -17411,7 +17417,7 @@ td::Status Client::process_add_proxy_query(PromisedQueryPtr &query) {
     return td::Status::Error(400, "Unsupported proxy type");
   }
 
-  send_request(make_object<td_api::addProxy>(server.str(), port, false, std::move(type)),
+  send_request(make_object<td_api::addProxy>(make_object<td_api::proxy>(server.str(), port, std::move(type)), false),
                td::make_unique<TdOnAddProxyQueryCallback>(std::move(query)));
   return td::Status::OK();
 }
