@@ -33,7 +33,7 @@ Built on top of **TDLib 1.8.61** — fully compatible with the official [Telegra
 |---------|-----------------|-----------|
 | User mode (userbots) | No | Yes |
 | Proxy management API | No | Yes (MTProto, SOCKS5, HTTP) |
-| Custom API methods | None | 35+ new methods |
+| Custom API methods | None | 35+ new methods + generic TDLib passthrough |
 | Message database | No | Yes (local caching) |
 | Extended statistics | Basic | Enhanced (message stats, graphs, public forwards) |
 | Extended objects | Standard | Extra fields on Message, Chat, User, ChatMember |
@@ -138,6 +138,48 @@ Send an MTProto ping to Telegram servers. Useful for measuring latency.
 **Parameters:** None
 
 **Returns:** Ping delay in seconds as `string`
+
+---
+
+#### `tdMethod`
+Send any TDLib function directly and get the raw response. This is a generic passthrough that allows calling any [TDLib API method](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html) without needing a dedicated Bot API wrapper.
+
+**Access:** Bot & User
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `request` | String (JSON) | Yes | A JSON object with `@type` specifying the TDLib function name, plus all function parameters |
+
+**Example requests:**
+
+```bash
+# Get current user info
+curl "{api_url}/bot{token}/tdMethod" \
+  -d 'request={"@type":"getMe"}'
+
+# Get a specific message
+curl "{api_url}/bot{token}/tdMethod" \
+  -d 'request={"@type":"getMessage","chat_id":-1001234567890,"message_id":123}'
+
+# Get chat details
+curl "{api_url}/bot{token}/tdMethod" \
+  -d 'request={"@type":"getChat","chat_id":-1001234567890}'
+```
+
+**Returns:** The raw TDLib response as a JSON object (with `@type` field indicating the response type), wrapped in the standard Bot API envelope:
+```json
+{
+  "ok": true,
+  "result": {
+    "@type": "chat",
+    "id": -1001234567890,
+    "title": "My Chat",
+    ...
+  }
+}
+```
+
+> **Note:** The `request` parameter uses TDLib's native JSON format. Function and parameter names use camelCase (e.g., `getMessage`, `chat_id`). See the [TDLib API reference](https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html) for all available functions and their parameters.
 
 ---
 
@@ -818,12 +860,17 @@ User accounts also cannot attach `reply_markup` to messages. Command entities ma
 <a name="docker--environment-variables"></a>
 ## Docker & Environment Variables
 
+### Build Docker Image
+```bash
+docker build -t telegram-api-local .
+```
+
 ### Quick Start
 ```bash
 docker run -p 8081:8081 \
   --env TELEGRAM_API_ID=YOUR_API_ID \
   --env TELEGRAM_API_HASH=YOUR_API_HASH \
-  tdlight/tdlightbotapi
+  telegram-api-local
 ```
 
 ### Environment Variables

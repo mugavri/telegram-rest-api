@@ -83,9 +83,18 @@ set(TELEGRAM_BOT_API_SOURCE
   telegram-bot-api/WebhookActor.h
 )
 
-add_executable(telegram-bot-api ${TELEGRAM_BOT_API_SOURCE})
-target_include_directories(telegram-bot-api PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+set_source_files_properties(${TL_TD_JSON_AUTO} PROPERTIES GENERATED TRUE)
+
+add_executable(telegram-bot-api ${TELEGRAM_BOT_API_SOURCE} ${TL_TD_JSON_AUTO})
+target_include_directories(telegram-bot-api PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/td/td/generate/auto>
+)
 target_link_libraries(telegram-bot-api PRIVATE memprof tdactor tdcore tddb tdnet tdutils)
+
+if (NOT CMAKE_CROSSCOMPILING)
+  add_dependencies(telegram-bot-api tl_generate_json)
+endif()
 
 install(TARGETS telegram-bot-api RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 if (MSVC AND VCPKG_TOOLCHAIN)

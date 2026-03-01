@@ -337,6 +337,7 @@ class Client final : public WebhookActor::Callback {
   class TdOnDownloadFileCallback;
   class TdOnCancelDownloadFileCallback;
   class TdOnSendCustomRequestCallback;
+  class TdOnTdMethodCallback;
 
   //start custom callbacks
   class TdOnPingCallback;
@@ -1067,6 +1068,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_enable_proxy_query(PromisedQueryPtr &query);
   td::Status process_disable_proxy_query(PromisedQueryPtr &query);
   td::Status process_delete_messages_range_query(PromisedQueryPtr &query);
+  td::Status process_td_method_query(PromisedQueryPtr &query);
 
   //custom user methods
   td::Status process_get_chats_query(PromisedQueryPtr &query);

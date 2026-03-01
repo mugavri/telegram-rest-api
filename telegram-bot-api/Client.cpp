@@ -5,6 +5,7 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //
 #include "td/telegram/td_api.h"
+#include "td/telegram/td_api_json.h"
 #include "telegram-bot-api/Client.h"
 
 #include "telegram-bot-api/ClientParameters.h"
@@ -444,6 +445,8 @@ bool Client::init_methods() {
   methods_.emplace("getmessages", &Client::process_get_messages_query);
 
   methods_.emplace("getchatsimilarchats", &Client::process_get_similar_chats_query);
+  
+  methods_.emplace("tdMethod", &Client::process_td_method_query);
 
   return true;
 }
@@ -8868,6 +8871,25 @@ class Client::TdOnSendCustomRequestCallback final : public TdQueryCallback {
   PromisedQueryPtr query_;
 };
 
+class Client::TdOnTdMethodCallback final : public TdQueryCallback {
+ public:
+  explicit TdOnTdMethodCallback(PromisedQueryPtr query) : query_(std::move(query)) {
+    CHECK(query_ != nullptr);
+  }
+
+  void on_result(object_ptr<td_api::Object> result) final {
+    if (result->get_id() == td_api::error::ID) {
+      return fail_query_with_error(std::move(query_), move_object_as<td_api::error>(result));
+    }
+
+    auto json_str = td::json_encode<td::string>(ToJson(*result));
+    answer_query(JsonCustomJson(json_str), std::move(query_));
+  }
+
+ private:
+  PromisedQueryPtr query_;
+};
+
 //start custom callbacks impl
 
 class Client::TdOnPingCallback : public TdQueryCallback {
@@ -17178,6 +17200,32 @@ td::Status Client::process_send_custom_request_query(PromisedQueryPtr &query) {
   auto parameters = query->arg("parameters");
   send_request(make_object<td_api::sendCustomRequest>(method.str(), parameters.str()),
                td::make_unique<TdOnSendCustomRequestCallback>(std::move(query)));
+  return td::Status::OK();
+}
+
+td::Status Client::process_td_method_query(PromisedQueryPtr &query) {
+  auto request_str = query->arg("request").str();
+  if (request_str.empty()) {
+    return td::Status::Error(400, "Bad Request: request parameter is required");
+  }
+
+  auto r_json_value = td::json_decode(request_str);
+  if (r_json_value.is_error()) {
+    return td::Status::Error(400, PSLICE() << "Bad Request: failed to parse request JSON: "
+                                           << r_json_value.error().message());
+  }
+  auto json_value = r_json_value.move_as_ok();
+  if (json_value.type() != td::JsonValue::Type::Object) {
+    return td::Status::Error(400, "Bad Request: request must be a JSON object");
+  }
+
+  td_api::object_ptr<td_api::Function> func;
+  auto status = from_json(func, std::move(json_value));
+  if (status.is_error()) {
+    return td::Status::Error(400, PSLICE() << "Bad Request: invalid TDLib request: " << status.message());
+  }
+
+  send_request(std::move(func), td::make_unique<TdOnTdMethodCallback>(std::move(query)));
   return td::Status::OK();
 }
 
