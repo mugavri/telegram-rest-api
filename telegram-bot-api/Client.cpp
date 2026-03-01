@@ -361,6 +361,7 @@ bool Client::init_methods() {
   methods_.emplace("leavechat", &Client::process_leave_chat_query);
   methods_.emplace("promotechatmember", &Client::process_promote_chat_member_query);
   methods_.emplace("setchatadministratorcustomtitle", &Client::process_set_chat_administrator_custom_title_query);
+  methods_.emplace("setchatmembertag", &Client::process_set_chat_member_tag_query);
   methods_.emplace("banchatmember", &Client::process_ban_chat_member_query);
   methods_.emplace("kickchatmember", &Client::process_ban_chat_member_query);
   methods_.emplace("restrictchatmember", &Client::process_restrict_chat_member_query);
@@ -673,6 +674,54 @@ class Client::JsonEntity final : public td::Jsonable {
       case td_api::textEntityTypeExpandableBlockQuote::ID:
         object("type", "expandable_blockquote");
         break;
+      case td_api::textEntityTypeDateTime::ID: {
+        auto entity = static_cast<const td_api::textEntityTypeDateTime *>(entity_->type_.get());
+        object("type", "date_time");
+        object("unix_time", entity->unix_time_);
+        td::string format;
+        if (entity->formatting_type_ != nullptr) {
+          switch (entity->formatting_type_->get_id()) {
+            case td_api::dateTimeFormattingTypeRelative::ID:
+              format = "r";
+              break;
+            case td_api::dateTimeFormattingTypeAbsolute::ID: {
+              auto abs = static_cast<const td_api::dateTimeFormattingTypeAbsolute *>(entity->formatting_type_.get());
+              if (abs->show_day_of_week_) {
+                format += 'w';
+              }
+              switch (abs->date_precision_->get_id()) {
+                case td_api::dateTimePartPrecisionNone::ID:
+                  break;
+                case td_api::dateTimePartPrecisionShort::ID:
+                  format += 'd';
+                  break;
+                case td_api::dateTimePartPrecisionLong::ID:
+                  format += 'D';
+                  break;
+                default:
+                  UNREACHABLE();
+              }
+              switch (abs->time_precision_->get_id()) {
+                case td_api::dateTimePartPrecisionNone::ID:
+                  break;
+                case td_api::dateTimePartPrecisionShort::ID:
+                  format += 't';
+                  break;
+                case td_api::dateTimePartPrecisionLong::ID:
+                  format += 'T';
+                  break;
+                default:
+                  UNREACHABLE();
+              }
+              break;
+            }
+            default:
+              UNREACHABLE();
+          }
+        }
+        object("date_time_format", format);
+        break;
+      }
       default:
         UNREACHABLE();
     }
@@ -1351,12 +1400,13 @@ class Client::JsonChat final : public td::Jsonable {
           }
           object("permissions", JsonChatPermissions(permissions));
         }
-        auto everyone_is_administrator =
-            permissions->can_send_basic_messages_ && permissions->can_send_audios_ &&
-            permissions->can_send_documents_ && permissions->can_send_photos_ && permissions->can_send_videos_ &&
-            permissions->can_send_video_notes_ && permissions->can_send_voice_notes_ && permissions->can_send_polls_ &&
-            permissions->can_send_other_messages_ && permissions->can_add_link_previews_ &&
-            permissions->can_change_info_ && permissions->can_invite_users_ && permissions->can_pin_messages_;
+        auto everyone_is_administrator = permissions->can_send_basic_messages_ && permissions->can_send_audios_ &&
+                                         permissions->can_send_documents_ && permissions->can_send_photos_ &&
+                                         permissions->can_send_videos_ && permissions->can_send_video_notes_ &&
+                                         permissions->can_send_voice_notes_ && permissions->can_send_polls_ &&
+                                         permissions->can_send_other_messages_ && permissions->can_add_link_previews_ &&
+                                         permissions->can_edit_tag_ && permissions->can_change_info_ &&
+                                         permissions->can_invite_users_ && permissions->can_pin_messages_;
         object("all_members_are_administrators", td::JsonBool(everyone_is_administrator));
         object("accepted_gift_types", JsonAcceptedGiftTypes(false, false, false, false, false));
         photo = group_info->photo.get();
@@ -4726,6 +4776,10 @@ void Client::JsonMessage::store(td::JsonValueScope *scope) const {
       object("chat_owner_changed", JsonChatOwnerChanged(content, client_));
       break;
     }
+    case td_api::messageChatHasProtectedContentToggled::ID:
+      break;
+    case td_api::messageChatHasProtectedContentDisableRequested::ID:
+      break;
     default:
       UNREACHABLE();
   }
@@ -4759,6 +4813,9 @@ void Client::JsonMessage::store(td::JsonValueScope *scope) const {
   }
   if (message_->sender_boost_count != 0) {
     object("sender_boost_count", message_->sender_boost_count);
+  }
+  if (!message_->sender_tag.empty()) {
+    object("sender_tag", message_->sender_tag);
   }
   if (message_->paid_message_star_count != 0) {
     object("paid_star_count", message_->paid_message_star_count);
@@ -5179,8 +5236,8 @@ class Client::JsonChatMember final : public td::Jsonable {
     switch (member_->status_->get_id()) {
       case td_api::chatMemberStatusCreator::ID: {
         auto creator = static_cast<const td_api::chatMemberStatusCreator *>(member_->status_.get());
-        if (!creator->custom_title_.empty()) {
-          object("custom_title", creator->custom_title_);
+        if (!member_->tag_.empty()) {
+          object("custom_title", member_->tag_);
         }
         object("is_anonymous", td::JsonBool(creator->is_anonymous_));
         // object("is_member", creator->is_member_); only creator itself knows that he is a left creator
@@ -5191,19 +5248,25 @@ class Client::JsonChatMember final : public td::Jsonable {
         object("can_be_edited", td::JsonBool(administrator->can_be_edited_));
         json_store_administrator_rights(object, administrator->rights_.get(), chat_type_);
         object("can_manage_voice_chats", td::JsonBool(administrator->rights_->can_manage_video_chats_));
-        if (!administrator->custom_title_.empty()) {
-          object("custom_title", administrator->custom_title_);
+        if (!member_->tag_.empty()) {
+          object("custom_title", member_->tag_);
         }
         break;
       }
       case td_api::chatMemberStatusMember::ID: {
         auto member = static_cast<const td_api::chatMemberStatusMember *>(member_->status_.get());
+        if (!member_->tag_.empty()) {
+          object("tag", member_->tag_);
+        }
         if (member->member_until_date_ > 0) {
           object("until_date", member->member_until_date_);
         }
         break;
       }
       case td_api::chatMemberStatusRestricted::ID:
+        if (!member_->tag_.empty()) {
+          object("tag", member_->tag_);
+        }
         if (chat_type_ == Client::ChatType::Supergroup) {
           auto restricted = static_cast<const td_api::chatMemberStatusRestricted *>(member_->status_.get());
           object("until_date", restricted->restricted_until_date_);
@@ -12480,11 +12543,13 @@ td::Result<td_api::object_ptr<td_api::chatAdministratorRights>> Client::get_chat
   TRY_RESULT(can_edit_stories, object.get_optional_bool_field("can_edit_stories"));
   TRY_RESULT(can_delete_stories, object.get_optional_bool_field("can_delete_stories"));
   TRY_RESULT(can_manage_direct_messages, object.get_optional_bool_field("can_manage_direct_messages"));
+  TRY_RESULT(can_manage_tags, object.get_optional_bool_field("can_manage_tags"));
   TRY_RESULT(is_anonymous, object.get_optional_bool_field("is_anonymous"));
   return make_object<td_api::chatAdministratorRights>(
       can_manage_chat, can_change_info, can_post_messages, can_edit_messages, can_delete_messages, can_invite_users,
       can_restrict_members, can_pin_messages, can_manage_topics, can_promote_members, can_manage_video_chats,
-      can_post_stories, can_edit_stories, can_delete_stories, can_manage_direct_messages, is_anonymous);
+      can_post_stories, can_edit_stories, can_delete_stories, can_manage_direct_messages, can_manage_tags,
+      is_anonymous);
 }
 
 td::Result<td_api::object_ptr<td_api::chatAdministratorRights>> Client::get_chat_administrator_rights(
@@ -12971,6 +13036,48 @@ td::Result<td_api::object_ptr<td_api::TextEntityType>> Client::get_text_entity_t
   if (type == "expandable_blockquote") {
     return make_object<td_api::textEntityTypeExpandableBlockQuote>();
   }
+  if (type == "date_time") {
+    TRY_RESULT(unix_time, object.get_required_int_field("unix_time"));
+    TRY_RESULT(format, object.get_optional_string_field("date_time_format"));
+    bool is_invalid = false;
+    auto formatting_type = [&format, &is_invalid]() -> object_ptr<td_api::DateTimeFormattingType> {
+      if (format.empty()) {
+        return nullptr;
+      }
+      if (format == "r" || format == "R") {
+        return make_object<td_api::dateTimeFormattingTypeRelative>();
+      }
+      auto result = make_object<td_api::dateTimeFormattingTypeAbsolute>();
+      for (auto c : format) {
+        switch (c) {
+          case 't':
+            result->time_precision_ = make_object<td_api::dateTimePartPrecisionShort>();
+            break;
+          case 'T':
+            result->time_precision_ = make_object<td_api::dateTimePartPrecisionLong>();
+            break;
+          case 'd':
+            result->date_precision_ = make_object<td_api::dateTimePartPrecisionShort>();
+            break;
+          case 'D':
+            result->date_precision_ = make_object<td_api::dateTimePartPrecisionLong>();
+            break;
+          case 'w':
+          case 'W':
+            result->show_day_of_week_ = true;
+            break;
+          default:
+            is_invalid = true;
+            break;
+        }
+      }
+      return std::move(result);
+    }();
+    if (is_invalid) {
+      return td::Status::Error(400, "Invalid date-time format specified");
+    }
+    return make_object<td_api::textEntityTypeDateTime>(unix_time, std::move(formatting_type));
+  }
   if (type == "mention" || type == "hashtag" || type == "cashtag" || type == "bot_command" || type == "url" ||
       type == "email" || type == "phone_number" || type == "bank_card_number") {
     return nullptr;
@@ -13124,7 +13231,8 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
   auto can_send_voice_notes = false;
   auto can_send_polls = false;
   auto can_send_other_messages = false;
-  auto can_add_web_page_previews = false;
+  auto can_add_link_previews = false;
+  auto can_edit_tag = false;
   auto can_change_info = false;
   auto can_invite_users = false;
   auto can_pin_messages = false;
@@ -13149,7 +13257,7 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
       TRY_RESULT_ASSIGN(can_send_messages, object.get_optional_bool_field("can_send_messages"));
       TRY_RESULT_ASSIGN(can_send_polls, object.get_optional_bool_field("can_send_polls"));
       TRY_RESULT_ASSIGN(can_send_other_messages, object.get_optional_bool_field("can_send_other_messages"));
-      TRY_RESULT_ASSIGN(can_add_web_page_previews, object.get_optional_bool_field("can_add_web_page_previews"));
+      TRY_RESULT_ASSIGN(can_add_link_previews, object.get_optional_bool_field("can_add_web_page_previews"));
       TRY_RESULT_ASSIGN(can_change_info, object.get_optional_bool_field("can_change_info"));
       TRY_RESULT_ASSIGN(can_invite_users, object.get_optional_bool_field("can_invite_users"));
       TRY_RESULT_ASSIGN(can_pin_messages, object.get_optional_bool_field("can_pin_messages"));
@@ -13179,6 +13287,11 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
           can_send_messages = true;
         }
       }
+      if (object.has_field("can_edit_tag")) {
+        TRY_RESULT_ASSIGN(can_edit_tag, object.get_optional_bool_field("can_edit_tag"));
+      } else {
+        can_edit_tag = can_pin_messages;
+      }
       return td::Status::OK();
     }();
 
@@ -13186,7 +13299,7 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
       return td::Status::Error(400, PSLICE() << "Can't parse chat permissions: " << status.message());
     }
 
-    if ((can_send_other_messages || can_add_web_page_previews) && !use_independent_chat_permissions) {
+    if ((can_send_other_messages || can_add_link_previews) && !use_independent_chat_permissions) {
       can_send_audios = true;
       can_send_documents = true;
       can_send_photos = true;
@@ -13204,15 +13317,15 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
     can_send_messages = to_bool(query->arg("can_send_messages"));
     bool can_send_media_messages = to_bool(query->arg("can_send_media_messages"));
     can_send_other_messages = to_bool(query->arg("can_send_other_messages"));
-    can_add_web_page_previews = to_bool(query->arg("can_add_web_page_previews"));
-    if ((can_send_other_messages || can_add_web_page_previews) && !use_independent_chat_permissions) {
+    can_add_link_previews = to_bool(query->arg("can_add_web_page_previews"));
+    if ((can_send_other_messages || can_add_link_previews) && !use_independent_chat_permissions) {
       can_send_media_messages = true;
     }
     if (can_send_media_messages && !use_independent_chat_permissions) {
       can_send_messages = true;
     }
 
-    if (can_send_messages && can_send_media_messages && can_send_other_messages && can_add_web_page_previews) {
+    if (can_send_messages && can_send_media_messages && can_send_other_messages && can_add_link_previews) {
       // legacy unrestrict
       can_send_polls = true;
       can_change_info = true;
@@ -13232,10 +13345,10 @@ td::Result<td_api::object_ptr<td_api::chatPermissions>> Client::get_chat_permiss
     can_send_voice_notes = can_send_media_messages;
   }
 
-  return make_object<td_api::chatPermissions>(can_send_messages, can_send_audios, can_send_documents, can_send_photos,
-                                              can_send_videos, can_send_video_notes, can_send_voice_notes,
-                                              can_send_polls, can_send_other_messages, can_add_web_page_previews,
-                                              can_change_info, can_invite_users, can_pin_messages, can_manage_topics);
+  return make_object<td_api::chatPermissions>(
+      can_send_messages, can_send_audios, can_send_documents, can_send_photos, can_send_videos, can_send_video_notes,
+      can_send_voice_notes, can_send_polls, can_send_other_messages, can_add_link_previews, can_edit_tag,
+      can_change_info, can_invite_users, can_pin_messages, can_manage_topics);
 }
 
 td::Result<td_api::object_ptr<td_api::inputChecklistTask>> Client::get_input_checklist_task(
@@ -14281,7 +14394,7 @@ void Client::on_message_send_failed(int64 chat_id, int64 old_message_id, int64 n
   auto &query = *pending_send_message_queries_[query_id];
   if (query.is_multisend) {
     if (query.error == nullptr || query.error->message_ == "Group send failed") {
-      if (is_special_error_code(error->code_) || error->message_ == "Group send failed") {
+      if (is_special_error_code(error->code_) || error->code_ == 406 || error->message_ == "Group send failed") {
         query.error = std::move(error);
       } else {
         auto pos = (query.total_message_count - query.awaited_message_count + 1);
@@ -16705,17 +16818,19 @@ td::Status Client::process_promote_chat_member_query(PromisedQueryPtr &query) {
   auto can_edit_stories = to_bool(query->arg("can_edit_stories"));
   auto can_delete_stories = to_bool(query->arg("can_delete_stories"));
   auto can_manage_direct_messages = to_bool(query->arg("can_manage_direct_messages"));
+  auto can_manage_tags = to_bool(query->arg("can_manage_tags"));
   auto is_anonymous = to_bool(query->arg("is_anonymous"));
   auto is_promotion = can_manage_chat || can_change_info || can_post_messages || can_edit_messages ||
                       can_delete_messages || can_invite_users || can_restrict_members || can_pin_messages ||
                       can_manage_topics || can_promote_members || can_manage_video_chats || can_post_stories ||
-                      can_edit_stories || can_delete_stories || can_manage_direct_messages || is_anonymous;
+                      can_edit_stories || can_delete_stories || can_manage_direct_messages || can_manage_tags ||
+                      is_anonymous;
   auto status = make_object<td_api::chatMemberStatusAdministrator>(
-      td::string(), true,
-      make_object<td_api::chatAdministratorRights>(
-          can_manage_chat, can_change_info, can_post_messages, can_edit_messages, can_delete_messages, can_invite_users,
-          can_restrict_members, can_pin_messages, can_manage_topics, can_promote_members, can_manage_video_chats,
-          can_post_stories, can_edit_stories, can_delete_stories, can_manage_direct_messages, is_anonymous));
+      true, make_object<td_api::chatAdministratorRights>(
+                can_manage_chat, can_change_info, can_post_messages, can_edit_messages, can_delete_messages,
+                can_invite_users, can_restrict_members, can_pin_messages, can_manage_topics, can_promote_members,
+                can_manage_video_chats, can_post_stories, can_edit_stories, can_delete_stories,
+                can_manage_direct_messages, can_manage_tags, is_anonymous));
   check_chat(chat_id, AccessRights::Write, std::move(query),
              [this, user_id, status = std::move(status), is_promotion](int64 chat_id, PromisedQueryPtr query) mutable {
                auto chat_info = get_chat(chat_id);
@@ -16730,20 +16845,9 @@ td::Status Client::process_promote_chat_member_query(PromisedQueryPtr &query) {
                  status->rights_->can_restrict_members_ = true;
                }
 
-               get_chat_member(
-                   chat_id, user_id, std::move(query),
-                   [this, chat_id, user_id, status = std::move(status)](object_ptr<td_api::chatMember> &&chat_member,
-                                                                        PromisedQueryPtr query) mutable {
-                     if (chat_member->status_->get_id() == td_api::chatMemberStatusAdministrator::ID) {
-                       auto administrator =
-                           static_cast<const td_api::chatMemberStatusAdministrator *>(chat_member->status_.get());
-                       status->custom_title_ = std::move(administrator->custom_title_);
-                     }
-
-                     send_request(make_object<td_api::setChatMemberStatus>(
-                                      chat_id, make_object<td_api::messageSenderUser>(user_id), std::move(status)),
-                                  td::make_unique<TdOnOkQueryCallback>(std::move(query)));
-                   });
+               send_request(make_object<td_api::setChatMemberStatus>(
+                                chat_id, make_object<td_api::messageSenderUser>(user_id), std::move(status)),
+                            td::make_unique<TdOnOkQueryCallback>(std::move(query)));
              });
   return td::Status::OK();
 }
@@ -16753,8 +16857,9 @@ td::Status Client::process_set_chat_administrator_custom_title_query(PromisedQue
   TRY_RESULT(user_id, get_user_id(query.get()));
 
   check_chat(chat_id, AccessRights::Write, std::move(query), [this, user_id](int64 chat_id, PromisedQueryPtr query) {
-    if (get_chat_type(chat_id) != ChatType::Supergroup) {
-      return fail_query(400, "Bad Request: method is available only for supergroups", std::move(query));
+    auto chat_type = get_chat_type(chat_id);
+    if (chat_type != ChatType::Group && chat_type != ChatType::Supergroup) {
+      return fail_query(400, "Bad Request: method is available only for groups and supergroups", std::move(query));
     }
 
     get_chat_member(
@@ -16771,12 +16876,30 @@ td::Status Client::process_set_chat_administrator_custom_title_query(PromisedQue
             return fail_query(400, "Bad Request: not enough rights to change custom title of the user",
                               std::move(query));
           }
-          administrator->custom_title_ = query->arg("custom_title").str();
 
-          send_request(make_object<td_api::setChatMemberStatus>(
-                           chat_id, make_object<td_api::messageSenderUser>(user_id), std::move(administrator)),
+          auto custom_title = query->arg("custom_title").str();
+          send_request(make_object<td_api::setChatMemberTag>(chat_id, user_id, custom_title),
                        td::make_unique<TdOnOkQueryCallback>(std::move(query)));
         });
+  });
+  return td::Status::OK();
+}
+
+td::Status Client::process_set_chat_member_tag_query(PromisedQueryPtr &query) {
+  auto chat_id = query->arg("chat_id");
+  TRY_RESULT(user_id, get_user_id(query.get()));
+
+  check_chat(chat_id, AccessRights::Write, std::move(query), [this, user_id](int64 chat_id, PromisedQueryPtr query) {
+    auto chat_type = get_chat_type(chat_id);
+    if (chat_type != ChatType::Group && chat_type != ChatType::Supergroup) {
+      return fail_query(400, "Bad Request: method is available only for groups and supergroups", std::move(query));
+    }
+
+    check_user_no_fail(user_id, std::move(query), [this, chat_id, user_id](PromisedQueryPtr query) {
+      auto tag = query->arg("tag").str();
+      send_request(make_object<td_api::setChatMemberTag>(chat_id, user_id, tag),
+                   td::make_unique<TdOnOkQueryCallback>(std::move(query)));
+    });
   });
   return td::Status::OK();
 }
@@ -19153,6 +19276,9 @@ void Client::json_store_administrator_rights(td::JsonObjectScope &object, const 
   if (chat_type == ChatType::Channel) {
     object("can_manage_direct_messages", td::JsonBool(rights->can_manage_direct_messages_));
   }
+  if (chat_type == ChatType::Group || chat_type == ChatType::Supergroup) {
+    object("can_manage_tags", td::JsonBool(rights->can_manage_tags_));
+  }
   object("is_anonymous", td::JsonBool(rights->is_anonymous_));
 }
 
@@ -19171,6 +19297,7 @@ void Client::json_store_permissions(td::JsonObjectScope &object, const td_api::c
   object("can_send_polls", td::JsonBool(permissions->can_send_polls_));
   object("can_send_other_messages", td::JsonBool(permissions->can_send_other_messages_));
   object("can_add_web_page_previews", td::JsonBool(permissions->can_add_link_previews_));
+  object("can_edit_tag", td::JsonBool(permissions->can_edit_tag_));
   object("can_change_info", td::JsonBool(permissions->can_change_info_));
   object("can_invite_users", td::JsonBool(permissions->can_invite_users_));
   object("can_pin_messages", td::JsonBool(permissions->can_pin_messages_));
@@ -19871,6 +19998,8 @@ bool Client::need_skip_update_message(int64 chat_id, const object_ptr<td_api::me
     case td_api::messageSuggestBirthdate::ID:
     case td_api::messageUpgradedGiftPurchaseOffer::ID:
     case td_api::messageUpgradedGiftPurchaseOfferRejected::ID:
+    case td_api::messageChatHasProtectedContentToggled::ID:
+    case td_api::messageChatHasProtectedContentDisableRequested::ID:
       return true;
     default:
       break;
@@ -19957,6 +20086,9 @@ td::int64 Client::get_same_chat_reply_to_message_id(const object_ptr<td_api::mes
       case td_api::messageUpgradedGiftPurchaseOfferRejected::ID:
         return static_cast<const td_api::messageUpgradedGiftPurchaseOfferRejected *>(message->content_.get())
             ->offer_message_id_;
+      case td_api::messageChatHasProtectedContentToggled::ID:
+        return static_cast<const td_api::messageChatHasProtectedContentToggled *>(message->content_.get())
+            ->request_message_id_;
       default:
         return static_cast<int64>(0);
     }
@@ -20476,6 +20608,7 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   message_info->topic_id = std::move(message->topic_id_);
   message_info->author_signature = std::move(message->author_signature_);
   message_info->sender_boost_count = message->sender_boost_count_;
+  message_info->sender_tag = std::move(message->sender_tag_);
   message_info->paid_message_star_count = message->paid_message_star_count_;
   message_info->effect_id = message->effect_id_;
   message_info->is_paid_post = message->is_paid_star_suggested_post_ || message->is_paid_ton_suggested_post_;

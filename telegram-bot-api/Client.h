@@ -1025,6 +1025,7 @@ class Client final : public WebhookActor::Callback {
   td::Status process_leave_chat_query(PromisedQueryPtr &query);
   td::Status process_promote_chat_member_query(PromisedQueryPtr &query);
   td::Status process_set_chat_administrator_custom_title_query(PromisedQueryPtr &query);
+  td::Status process_set_chat_member_tag_query(PromisedQueryPtr &query);
   td::Status process_ban_chat_member_query(PromisedQueryPtr &query);
   td::Status process_restrict_chat_member_query(PromisedQueryPtr &query);
   td::Status process_unban_chat_member_query(PromisedQueryPtr &query);
@@ -1336,6 +1337,7 @@ class Client final : public WebhookActor::Callback {
     int64 paid_message_star_count = 0;
     object_ptr<td_api::MessageOrigin> forward_origin;
     td::string author_signature;
+    td::string sender_tag;
     td::unique_ptr<MessageInfo> business_reply_to_message;
     object_ptr<td_api::messageReplyToMessage> reply_to_message;
     object_ptr<td_api::messageReplyToStory> reply_to_story;
