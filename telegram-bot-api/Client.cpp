@@ -447,7 +447,7 @@ bool Client::init_methods() {
 
   methods_.emplace("getchatsimilarchats", &Client::process_get_similar_chats_query);
   
-  methods_.emplace("tdMethod", &Client::process_td_method_query);
+  methods_.emplace("tdmethod", &Client::process_td_method_query);
 
   return true;
 }
