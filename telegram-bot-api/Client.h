@@ -1489,6 +1489,9 @@ class Client final : public WebhookActor::Callback {
   void on_update_message_suggested_post_info(int64 chat_id, int64 message_id,
                                              object_ptr<td_api::suggestedPostInfo> &&suggested_post_info);
 
+  void on_update_message_interaction_info(int64 chat_id, int64 message_id,
+                                         object_ptr<td_api::messageInteractionInfo> &&interaction_info);
+
   void on_update_message_edited(int64 chat_id, int64 message_id, int32 edit_date,
                                 object_ptr<td_api::ReplyMarkup> &&reply_markup);
 

@@ -10662,6 +10662,12 @@ void Client::on_update(object_ptr<td_api::Object> result) {
                                             std::move(update->suggested_post_info_));
       break;
     }
+    case td_api::updateMessageInteractionInfo::ID: {
+      auto update = move_object_as<td_api::updateMessageInteractionInfo>(result);
+      on_update_message_interaction_info(update->chat_id_, update->message_id_,
+                                         std::move(update->interaction_info_));
+      break;
+    }
     case td_api::updateMessageEdited::ID: {
       auto update = move_object_as<td_api::updateMessageEdited>(result);
       auto chat_id = update->chat_id_;
@@ -20680,6 +20686,22 @@ void Client::on_update_message_suggested_post_info(int64 chat_id, int64 message_
   }
 
   set_message_suggested_post_info(message_info, std::move(suggested_post_info));
+}
+
+void Client::on_update_message_interaction_info(int64 chat_id, int64 message_id,
+                                                object_ptr<td_api::messageInteractionInfo> &&interaction_info) {
+  auto message_info = get_message_editable(chat_id, message_id);
+  if (message_info == nullptr) {
+    return;
+  }
+  if (interaction_info != nullptr) {
+    message_info->views = interaction_info->view_count_;
+    message_info->forwards = interaction_info->forward_count_;
+  } else {
+    message_info->views = 0;
+    message_info->forwards = 0;
+  }
+  message_info->interaction_info = std::move(interaction_info);
 }
 
 void Client::on_update_message_edited(int64 chat_id, int64 message_id, int32 edit_date,
