@@ -4199,13 +4199,6 @@ void Client::JsonMessage::store(td::JsonValueScope *scope) const {
   if (message_->edit_date > 0) {
     object("edit_date", message_->edit_date);
   }
-  if (message_->views != 0) {
-    object("views", message_->views);
-  }
-  if (message_->forwards != 0) {
-    object("forwards", message_->forwards);
-  }
-
   if (message_->interaction_info != nullptr) {
     object("interaction_info", JsonMessageInteractionInfo(message_->interaction_info.get(), client_));
   }
@@ -20596,8 +20589,6 @@ void Client::init_message(MessageInfo *message_info, object_ptr<td_api::message>
   }
 
   if (message->interaction_info_ != nullptr) {
-    message_info->views = message->interaction_info_->view_count_;
-    message_info->forwards = message->interaction_info_->forward_count_;
     message_info->interaction_info = std::move(message->interaction_info_);
   }
 
@@ -20693,13 +20684,6 @@ void Client::on_update_message_interaction_info(int64 chat_id, int64 message_id,
   auto message_info = get_message_editable(chat_id, message_id);
   if (message_info == nullptr) {
     return;
-  }
-  if (interaction_info != nullptr) {
-    message_info->views = interaction_info->view_count_;
-    message_info->forwards = interaction_info->forward_count_;
-  } else {
-    message_info->views = 0;
-    message_info->forwards = 0;
   }
   message_info->interaction_info = std::move(interaction_info);
 }

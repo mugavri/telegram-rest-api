@@ -1352,9 +1352,6 @@ class Client final : public WebhookActor::Callback {
     int64 effect_id = 0;
 
     // start custom properties
-    int32 views = 0;
-    int32 forwards = 0;
-
     int32 scheduled_at = 0;
 
     object_ptr<td_api::messageInteractionInfo> interaction_info;
