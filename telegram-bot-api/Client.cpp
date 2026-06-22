@@ -447,6 +447,8 @@ bool Client::init_methods() {
 
   methods_.emplace("getchatsimilarchats", &Client::process_get_similar_chats_query);
   
+  methods_.emplace("getserverversion", &Client::process_get_server_version_query);
+
   methods_.emplace("tdmethod", &Client::process_td_method_query);
 
   return true;
@@ -17659,6 +17661,11 @@ td::Status Client::process_delete_messages_range_query(PromisedQueryPtr &query) 
     }
   });
 
+  return td::Status::OK();
+}
+
+td::Status Client::process_get_server_version_query(PromisedQueryPtr &query) {
+  answer_query(td::JsonString(parameters_->version_), std::move(query));
   return td::Status::OK();
 }
 //end custom methods impl
