@@ -18996,8 +18996,15 @@ td::Status Client::process_get_inactive_chats_query(PromisedQueryPtr &query) {
 td::Status Client::process_search_public_chats_query(PromisedQueryPtr &query) {
   CHECK_IS_USER();
   auto query_ = query->arg("query");
+  auto type = query->arg("type");
 
-  send_request(make_object<td_api::searchPublicChats>(query_.str()),
+  object_ptr<td_api::SearchChatTypeFilter> chat_filter_type = make_object<td_api::searchChatTypeFilterChannel>();
+
+  if (!type.empty() && type == "bot") {
+    chat_filter_type = make_object<td_api::searchChatTypeFilterBot>();
+  }
+
+  send_request(make_object<td_api::searchPublicChats>(query_.str(), std::move(chat_filter_type)),
                td::make_unique<TdOnGetChatsCallback>(this, std::move(query)));
   return td::Status::OK();
 }
