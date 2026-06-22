@@ -6996,6 +6996,34 @@ class Client::JsonAuthorizationState : public td::Jsonable {
                 break;
             }
           }
+
+          if (!state_code->code_info_->next_type_->get_id()) {
+            object("next_code_type", "none");
+          } else {
+            switch (state_code->code_info_->next_type_->get_id()) {
+              case td_api::authenticationCodeTypeTelegramMessage::ID:
+                object("next_code_type", "telegram_message");
+                break;
+              case td_api::authenticationCodeTypeSms::ID:
+              case td_api::authenticationCodeTypeSmsWord::ID:
+              case td_api::authenticationCodeTypeSmsPhrase::ID:
+                object("next_code_type", "sms");
+                break;
+              case td_api::authenticationCodeTypeCall::ID:
+                object("next_code_type", "call");
+                break;
+              case td_api::authenticationCodeTypeFlashCall::ID:
+              case td_api::authenticationCodeTypeMissedCall::ID:
+                object("next_code_type", "missed_call");
+                break;
+              case td_api::authenticationCodeTypeFragment::ID:
+                object("next_code_type", "fragment");
+                break;
+              default:
+                object("next_code_type", "other");
+                break;
+            }
+          }
         }
         break;
       }
