@@ -18883,7 +18883,7 @@ td::Status Client::process_add_proxy_query(PromisedQueryPtr &query) {
     return td::Status::Error(400, "Unsupported proxy type");
   }
 
-  send_request(make_object<td_api::addProxy>(make_object<td_api::proxy>(server.str(), port, std::move(type)), false),
+  send_request(make_object<td_api::addProxy>(make_object<td_api::proxy>(server.str(), port, std::move(type)), false, ""),
                td::make_unique<TdOnAddProxyQueryCallback>(std::move(query)));
   return td::Status::OK();
 }
