@@ -15527,6 +15527,8 @@ void Client::on_cmd(PromisedQueryPtr query, bool force) {
       return process_auth_phone_number_query(query);
     } else if (query->method() == "authcode") {
       return process_authcode_query(query);
+    } else if (query->method() == "resendcode") {
+      return process_resend_authentication_code_query(query);
     } else if (query->method() == "2fapassword" || query->method() == "authpassword") {
       return process_2fapassword_query(query);
     } else if (query->method() == "registeruser" && parameters_->allow_users_registration_) {
@@ -19650,6 +19652,15 @@ void Client::process_authcode_query(PromisedQueryPtr &query) {
     return fail_query(400, "Bad Request: currently not waiting for a code", std::move(query));
   }
   send_request(make_object<td_api::checkAuthenticationCode>(code.str()),
+               td::make_unique<TdOnAuthorizationQueryCallback>(this, std::move(query)));
+}
+
+void Client::process_resend_authentication_code_query(PromisedQueryPtr &query) {
+  if (authorization_state_->get_id() != td_api::authorizationStateWaitCode::ID) {
+    return fail_query(400, "Bad Request: currently not waiting for a code", std::move(query));
+  }
+  auto reason = make_object<td_api::resendCodeReasonUserRequest>();
+  send_request(make_object<td_api::resendAuthenticationCode>(std::move(reason)),
                td::make_unique<TdOnAuthorizationQueryCallback>(this, std::move(query)));
 }
 

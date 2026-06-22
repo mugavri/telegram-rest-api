@@ -1168,6 +1168,7 @@ class Client final : public WebhookActor::Callback {
   //custom auth methods
   void process_auth_phone_number_query(PromisedQueryPtr &query);
   void process_authcode_query(PromisedQueryPtr &query);
+  void process_resend_authentication_code_query(PromisedQueryPtr &query);
   void process_2fapassword_query(PromisedQueryPtr &query);
   void process_register_user_query(PromisedQueryPtr &query);
 
