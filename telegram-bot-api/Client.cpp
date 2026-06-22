@@ -6997,9 +6997,7 @@ class Client::JsonAuthorizationState : public td::Jsonable {
             }
           }
 
-          if (!state_code->code_info_->next_type_->get_id()) {
-            object("next_code_type", "none");
-          } else {
+          if (state_code->code_info_->next_type_ != nullptr) {
             switch (state_code->code_info_->next_type_->get_id()) {
               case td_api::authenticationCodeTypeTelegramMessage::ID:
                 object("next_code_type", "telegram_message");
