@@ -43,6 +43,10 @@ class HttpServer final : public td::TcpListener::Callback {
   td::ActorOwn<td::TcpListener> listener_;
   td::FloodControlFast flood_control_;
 
+  static constexpr std::size_t MAX_IN_MEMORY_POST_SIZE = 0;
+  static constexpr std::size_t MAX_FILE_COUNT = 50;
+  static constexpr td::int32 IDLE_TIMEOUT = 500;
+
   void start_up() final {
     auto now = td::Time::now();
     auto wakeup_at = flood_control_.get_wakeup_at();
@@ -64,8 +68,9 @@ class HttpServer final : public td::TcpListener::Callback {
   }
 
   void accept(td::SocketFd fd) final {
-    td::create_actor<td::HttpInboundConnection>("HttpInboundConnection", td::BufferedFd<td::SocketFd>(std::move(fd)), 0,
-                                                50, idle_timeout_, creator_(), SharedData::get_slow_incoming_http_scheduler_id())
+    td::create_actor<td::HttpInboundConnection>("HttpInboundConnection", td::BufferedFd<td::SocketFd>(std::move(fd)),
+                                                MAX_IN_MEMORY_POST_SIZE, MAX_FILE_COUNT, idle_timeout_, creator_(),
+                                                SharedData::get_slow_incoming_http_scheduler_id())
         .release();
   }
 
