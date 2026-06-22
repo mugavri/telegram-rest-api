@@ -1036,7 +1036,7 @@ class Client::JsonRichTableRow final : public td::Jsonable {
   const td::vector<object_ptr<td_api::pageBlockTableCell>> &cells_;
   const Client *client_;
 };
-
+      // end switch
 class Client::JsonRichBlockCaption final : public td::Jsonable {
  public:
   JsonRichBlockCaption(const td_api::pageBlockCaption *caption, const Client *client)
@@ -6967,8 +6967,35 @@ class Client::JsonAuthorizationState : public td::Jsonable {
       case td_api::authorizationStateWaitCode::ID: {
         object("authorization_state", "wait_code");
         auto state_code = static_cast<const td_api::authorizationStateWaitCode *>(state_);
-        if (state_code != nullptr && state_code->code_info_ != nullptr && state_code->code_info_->timeout_ != 0) {
-          object("timeout", state_code->code_info_->timeout_);
+        if (state_code != nullptr && state_code->code_info_ != nullptr) {
+          if (state_code->code_info_->timeout_ != 0) {
+            object("timeout", state_code->code_info_->timeout_);
+          }
+          if (state_code->code_info_->type_ != nullptr) {
+            switch (state_code->code_info_->type_->get_id()) {
+              case td_api::authenticationCodeTypeTelegramMessage::ID:
+                object("code_type", "telegram_message");
+                break;
+              case td_api::authenticationCodeTypeSms::ID:
+              case td_api::authenticationCodeTypeSmsWord::ID:
+              case td_api::authenticationCodeTypeSmsPhrase::ID:
+                object("code_type", "sms");
+                break;
+              case td_api::authenticationCodeTypeCall::ID:
+                object("code_type", "call");
+                break;
+              case td_api::authenticationCodeTypeFlashCall::ID:
+              case td_api::authenticationCodeTypeMissedCall::ID:
+                object("code_type", "missed_call");
+                break;
+              case td_api::authenticationCodeTypeFragment::ID:
+                object("code_type", "fragment");
+                break;
+              default:
+                object("code_type", "other");
+                break;
+            }
+          }
         }
         break;
       }
