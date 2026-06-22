@@ -7045,7 +7045,7 @@ class Client::JsonMessagesArray : public td::Jsonable {
         continue;
       }
       auto full_message_id = client_->add_message(std::move(message));
-      const MessageInfo *m = client_->get_message(full_message_id.chat_id, full_message_id.message_id, true);
+      const MessageInfo *m = client_->get_message(full_message_id->chat_id, full_message_id->id, true);
       array << JsonMessage(m, true, "search", client_);
     }
   }
@@ -7830,8 +7830,8 @@ class Client::JsonMessageCalendarDay final : public td::Jsonable {
 
     auto message_full_id = client_->add_message(std::move(mutable_day->message_), true);
 
-    int64 calendar_message_id = message_full_id.message_id;
-    int64 chat_id = message_full_id.chat_id;
+    int64 calendar_message_id = message_full_id->id;
+    int64 chat_id = message_full_id->chat_id;
     CHECK(calendar_message_id > 0);
     const MessageInfo *calendar_message = client_->get_message(chat_id, calendar_message_id, true);
     object("message", JsonMessage(calendar_message, false, "message calendar day", client_));
@@ -10342,7 +10342,7 @@ class Client::TdOnReturnMessageCallback final : public TdQueryCallback {
     CHECK(result->get_id() == td_api::message::ID);
 
     auto full_message_id = client_->add_message(move_object_as<td_api::message>(result));
-    const MessageInfo *m = client_->get_message(full_message_id.chat_id, full_message_id.message_id, true);
+    const MessageInfo *m = client_->get_message(full_message_id->chat_id, full_message_id->id, true);
     answer_query(JsonMessage(m, false, "message", client_), std::move(query_));
   }
 
