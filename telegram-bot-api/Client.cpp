@@ -7025,6 +7025,15 @@ class Client::JsonAuthorizationState : public td::Jsonable {
         }
         break;
       }
+      case td_api::authorizationStateWaitOtherDeviceConfirmation::ID: {
+        object("authorization_state", "wait_other_device_confirmation");
+        auto state_other_device =
+            static_cast<const td_api::authorizationStateWaitOtherDeviceConfirmation *>(state_);
+        if (state_other_device != nullptr && !state_other_device->link_.empty()) {
+          object("link", state_other_device->link_);
+        }
+        break;
+      }
       case td_api::authorizationStateWaitPassword::ID: {
         object("authorization_state", "wait_password");
         auto state_password = static_cast<const td_api::authorizationStateWaitPassword *>(state_);
@@ -11341,6 +11350,7 @@ void Client::on_update_authorization_state() {
                             td::make_unique<TdOnAuthorizationCallback>(this));
       }
     case td_api::authorizationStateWaitCode::ID:
+    case td_api::authorizationStateWaitOtherDeviceConfirmation::ID:
     case td_api::authorizationStateWaitPassword::ID:
     case td_api::authorizationStateWaitRegistration::ID:
       waiting_for_auth_input_ = true;
@@ -19624,6 +19634,21 @@ td::Status Client::process_get_similar_chats_query(PromisedQueryPtr &query) {
 //start custom auth methods impl
 
 void Client::process_auth_phone_number_query(PromisedQueryPtr &query) {
+  auto use_qrcode = to_bool(query->arg("qrcode"));
+
+  LOG(INFO) << "Authentication start with " << (use_qrcode ? "QR code" : "phone number");
+
+  if (use_qrcode) {
+    if (authorization_state_->get_id() != td_api::authorizationStateWaitPhoneNumber::ID) {
+      return fail_query(400, "Bad Request: currently not waiting for authentication start", std::move(query));
+    }
+
+    td::vector<int64> other_user_ids;
+    send_request(make_object<td_api::requestQrCodeAuthentication>(std::move(other_user_ids)),
+                 td::make_unique<TdOnAuthorizationQueryCallback>(this, std::move(query), true));
+    return;
+  }
+
   td::MutableSlice r_phone_number = query->arg("phone_number");
   if (r_phone_number.size() < 5 || r_phone_number.size() > 15) {
     return fail_query(401, "Unauthorized: invalid phone number specified", std::move(query));
@@ -19637,7 +19662,10 @@ void Client::process_auth_phone_number_query(PromisedQueryPtr &query) {
   if (authorization_state_->get_id() != td_api::authorizationStateWaitPhoneNumber::ID) {
     return fail_query(400, "Bad Request: currently not waiting for a phone_number", std::move(query));
   }
-  send_request(make_object<td_api::setAuthenticationPhoneNumber>(td::to_string(phone_number), nullptr),
+
+  object_ptr<td_api::phoneNumberAuthenticationSettings> settings = make_object<td_api::phoneNumberAuthenticationSettings>();
+
+  send_request(make_object<td_api::setAuthenticationPhoneNumber>(td::to_string(phone_number), std::move(settings)),
                td::make_unique<TdOnAuthorizationQueryCallback>(this, std::move(query), true));
 }
 

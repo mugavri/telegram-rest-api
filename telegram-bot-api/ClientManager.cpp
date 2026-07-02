@@ -151,19 +151,37 @@ void ClientManager::user_login(PromisedQueryPtr query) {
   if (!parameters_->allow_users_) {
     return fail_query(405, "Method Not Allowed: Users are not allowed to use the api", std::move(query));
   }
+  bool use_qrcode = false;
+  {
+    auto qrcode_arg = query->arg("qrcode");
+    auto s = qrcode_arg.str();
+    td::to_lower_inplace(s);
+    s = td::trim(s);
+    use_qrcode = (s == "true" || s == "yes" || s == "1");
+  }
   td::MutableSlice r_phone_number = query->arg("phone_number");
-  if (r_phone_number.size() < 5 || r_phone_number.size() > 15) {
+  if (!use_qrcode && (r_phone_number.size() < 5 || r_phone_number.size() > 15)) {
     return fail_query(401, "Unauthorized: invalid phone number specified", std::move(query));
   }
   td::int64 phone_number = 0;
-  for (char const &c: r_phone_number) {
-    if (isdigit(c)) {
-      phone_number = phone_number * 10 + (c - 48);
+  if (!use_qrcode) {
+    for (char const &c: r_phone_number) {
+      if (isdigit(c)) {
+        phone_number = phone_number * 10 + (c - 48);
+      }
     }
   }
   td::UInt256 token_data;
   td::Random::secure_bytes(token_data.raw, sizeof(token_data));
-  td::string user_token = td::to_string(phone_number) + ":" + td::base64url_encode(token_data.as_slice());
+  td::string token_prefix;
+  if (use_qrcode) {
+    // Use a large random positive int64 so the token passes send() validation
+    td::int64 rand_id = static_cast<td::int64>(td::Random::fast_uint64() & 0x001FFFFFFFFFFFFFull) + 1; 
+    token_prefix = td::to_string(rand_id);
+  } else {
+    token_prefix = td::to_string(phone_number);
+  }
+  td::string user_token = token_prefix + ":" + td::base64url_encode(token_data.as_slice());
   auto user_token_with_dc = PSTRING() << user_token << (query->is_test_dc() ? ":T" : "");
 
   long token_hash = std::hash<td::string>{}(user_token);
