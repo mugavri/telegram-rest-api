@@ -494,17 +494,20 @@ int main(int argc, char *argv[]) {
       sched.create_actor_unsafe<td::GetHostByNameActor>(0, "GetHostByName", std::move(get_host_by_name_options))
           .release();
 
+  std::shared_ptr<const ClientParameters> shared_parameters(std::move(parameters));
+
   auto client_manager = sched
                             .create_actor_unsafe<ClientManager>(SharedData::get_client_scheduler_id(), "ClientManager",
-                                                                std::move(parameters), token_range)
+                                                                shared_parameters, token_range)
                             .release();
 
   sched
       .create_actor_unsafe<HttpServer>(
           SharedData::get_client_scheduler_id(), "HttpServer", http_ip_address, http_port, http_idle_timeout,
-          [client_manager, shared_data] {
+          [client_manager, shared_data, shared_parameters, token_range] {
             return td::ActorOwn<td::HttpInboundConnection::Callback>(
-                td::create_actor<HttpConnection>("HttpConnection", client_manager, shared_data));
+                td::create_actor<HttpConnection>("HttpConnection", client_manager, shared_parameters, shared_data,
+                                                 token_range));
           })
       .release();
 

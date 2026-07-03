@@ -26,16 +26,22 @@ struct SharedData;
 
 class HttpConnection final : public td::HttpInboundConnection::Callback {
  public:
-  HttpConnection(td::ActorId<ClientManager> client_manager, std::shared_ptr<SharedData> shared_data)
-      : client_manager_(client_manager), shared_data_(std::move(shared_data)) {
+  HttpConnection(td::ActorId<ClientManager> client_manager, std::shared_ptr<const ClientParameters> parameters,
+                 std::shared_ptr<SharedData> shared_data, ClientManager::TokenRange token_range)
+      : client_manager_(client_manager)
+      , parameters_(std::move(parameters))
+      , shared_data_(std::move(shared_data))
+      , token_range_(token_range) {
   }
 
   void handle(td::unique_ptr<td::HttpQuery> http_query, td::ActorOwn<td::HttpInboundConnection> connection) final;
 
  private:
   td::ActorId<ClientManager> client_manager_;
+  std::shared_ptr<const ClientParameters> parameters_;
   td::ActorOwn<td::HttpInboundConnection> connection_;
   std::shared_ptr<SharedData> shared_data_;
+  ClientManager::TokenRange token_range_;
 
   void hangup() final {
     connection_.release();
@@ -44,7 +50,11 @@ class HttpConnection final : public td::HttpInboundConnection::Callback {
 
   void on_query_finished(td::Result<td::unique_ptr<Query>> r_query);
 
+  void handle_file_request(td::Parser &url_path_parser);
+
   void send_response(int http_status_code, td::BufferSlice &&content, int retry_after);
+
+  void send_response(int http_status_code, td::BufferSlice &&content, td::Slice content_type, int retry_after);
 
   void send_http_error(int http_status_code, td::Slice description);
 };
