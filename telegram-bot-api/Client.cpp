@@ -19334,10 +19334,12 @@ td::Status Client::process_delete_messages_range_query(PromisedQueryPtr &query) 
     return td::Status::Error(400, "Chat identifier is not specified");
   }
 
-  auto start = as_client_message_id(get_message_id(query.get(), "start"));
-  auto end = as_client_message_id(get_message_id(query.get(), "end"));
+  // the range is expanded with as_tdlib_message_id below, so only regular message identifiers are
+  // usable here; the unchecked variant rejects scheduled ones instead of failing a CHECK
+  auto start = as_client_message_id_unchecked(get_message_id(query.get(), "start"));
+  auto end = as_client_message_id_unchecked(get_message_id(query.get(), "end"));
 
-  if (start == 0 || end == 0) {
+  if (start <= 0 || end <= 0) {
     return td::Status::Error(400, "Message identifier is not specified");
   }
 
