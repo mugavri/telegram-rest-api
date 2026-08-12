@@ -232,6 +232,7 @@ class Client final : public WebhookActor::Callback {
   class JsonBusinessBotRights;
   class JsonBusinessConnection;
   class JsonBusinessMessagesDeleted;
+  class JsonDeletedMessages;
   class JsonAddress;
   class JsonOrderInfo;
   class JsonStory;
@@ -1716,6 +1717,8 @@ class Client final : public WebhookActor::Callback {
 
   void add_update_business_messages_deleted(object_ptr<td_api::updateBusinessMessagesDeleted> &&update);
 
+  void add_update_deleted_messages(const td_api::updateDeleteMessages *update);
+
   // append only before Size
   enum class UpdateType : int32 {
     Message,
@@ -1746,6 +1749,7 @@ class Client final : public WebhookActor::Callback {
     ManagedBot,
     GuestMessage,
     Subscription,
+    DeletedMessages,
     Size
   };
 
@@ -1781,12 +1785,13 @@ class Client final : public WebhookActor::Callback {
 
   bool have_message_access(int64 chat_id) const;
 
-  // by default ChatMember, MessageReaction, and MessageReactionCount updates are disabled
+  // by default ChatMember, MessageReaction, MessageReactionCount, and DeletedMessages updates are disabled
   static constexpr td::uint64 DEFAULT_ALLOWED_UPDATE_TYPES =
       (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::Size)) - 1 -
       (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::ChatMember)) -
       (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::MessageReaction)) -
-      (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::MessageReactionCount));
+      (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::MessageReactionCount)) -
+      (static_cast<td::uint64>(1) << static_cast<int32>(UpdateType::DeletedMessages));
 
   object_ptr<td_api::AuthorizationState> authorization_state_;
   bool was_authorized_ = false;

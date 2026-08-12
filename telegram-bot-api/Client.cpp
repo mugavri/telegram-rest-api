@@ -6560,6 +6560,28 @@ class Client::JsonBusinessMessagesDeleted final : public td::Jsonable {
   const Client *client_;
 };
 
+class Client::JsonDeletedMessages final : public td::Jsonable {
+ public:
+  JsonDeletedMessages(const td_api::updateDeleteMessages *update, const Client *client)
+      : update_(update), client_(client) {
+  }
+  void store(td::JsonValueScope *scope) const {
+    auto object = scope->enter_object();
+    object("chat", JsonChat(update_->chat_id_, client_));
+    object("message_ids", td::json_array(update_->message_ids_, [](int64 message_id) {
+             // scheduled message identifiers have bit 2 set and use their own negative client form
+             if ((message_id & 4) != 0) {
+               return as_scheduled_message_id(message_id);
+             }
+             return as_client_message_id_unchecked(message_id);
+           }));
+  }
+
+ private:
+  const td_api::updateDeleteMessages *update_;
+  const Client *client_;
+};
+
 class Client::JsonReceivedGift final : public td::Jsonable {
  public:
   JsonReceivedGift(const td_api::receivedGift *received_gift, bool can_be_managed, const Client *client)
@@ -11586,6 +11608,10 @@ void Client::on_update(object_ptr<td_api::Object> result) {
     }
     case td_api::updateDeleteMessages::ID: {
       auto update = move_object_as<td_api::updateDeleteMessages>(result);
+      // from_cache_ means the messages were only unloaded from TDLib's memory cache, not deleted
+      if (update->is_permanent_ && !update->from_cache_) {
+        add_update_deleted_messages(update.get());
+      }
       td::vector<td::unique_ptr<MessageInfo>> deleted_messages;
       for (auto message_id : update->message_ids_) {
         auto deleted_message = delete_message(update->chat_id_, message_id, update->from_cache_);
@@ -21261,6 +21287,8 @@ td::Slice Client::get_update_type_name(UpdateType update_type) {
       return td::Slice("guest_message");
     case UpdateType::Subscription:
       return td::Slice("subscription");
+    case UpdateType::DeletedMessages:
+      return td::Slice("deleted_messages");
     default:
       UNREACHABLE();
       return td::Slice();
@@ -21740,6 +21768,12 @@ void Client::add_update_business_messages_deleted(object_ptr<td_api::updateBusin
   auto webhook_queue_id = update->chat_id_ + (static_cast<int64>(11) << 33);
   add_update(UpdateType::BusinessMessagesDeleted, JsonBusinessMessagesDeleted(update.get(), this), 86400,
              webhook_queue_id);
+}
+
+void Client::add_update_deleted_messages(const td_api::updateDeleteMessages *update) {
+  CHECK(update != nullptr);
+  auto webhook_queue_id = update->chat_id_ + (static_cast<int64>(15) << 33);
+  add_update(UpdateType::DeletedMessages, JsonDeletedMessages(update, this), 86400, webhook_queue_id);
 }
 
 void Client::add_new_business_message(object_ptr<td_api::updateNewBusinessMessage> &&update) {

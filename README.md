@@ -719,6 +719,18 @@ Extended with range deletion support (see [deleteMessages](#deletemessages) abov
 
 ---
 
+### Added Updates
+
+#### `deleted_messages`
+Sent when messages are permanently deleted in a chat (user mode). Disabled by default — add `"deleted_messages"` to `allowed_updates` in `setWebhook` or `getUpdates` to receive it.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chat` | Chat | The chat the messages were deleted from |
+| `message_ids` | Array of Integer | Identifiers of the deleted messages (scheduled messages use their negative identifier form) |
+
+---
+
 <a name="extended-objects"></a>
 ### Extended Objects
 
