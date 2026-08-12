@@ -22977,7 +22977,9 @@ td::int32 Client::as_scheduled_message_id(int64 message_id) {
 
 td::int32 Client::as_client_message_id_unchecked(int64 message_id) {
   auto result = static_cast<int32>(message_id >> 20);
-  if (as_tdlib_message_id(result) != message_id) {
+  // ignore the low 2 bits, like as_client_message_id does, so that local and yet unsent messages,
+  // which are visible in user mode, keep their real identifier
+  if (as_tdlib_message_id(result) >> 2 != message_id >> 2) {
     return 0;
   }
   return result;
