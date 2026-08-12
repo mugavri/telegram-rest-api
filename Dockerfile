@@ -1,4 +1,4 @@
-FROM alpine:3.12 AS build
+FROM alpine:3.24 AS build
 
 RUN apk add --no-cache --update alpine-sdk linux-headers git zlib-dev openssl-dev gperf cmake
 
@@ -13,7 +13,7 @@ RUN mkdir -p build \
  && cmake --build . --target install -j $(nproc) \
  && strip /root/DEV/telegram-rest-api/bin/telegram-bot-api
 
-FROM alpine:3.12
+FROM alpine:3.24
 
 ENV TELEGRAM_WORK_DIR="/var/lib/telegram-bot-api" \
     TELEGRAM_TEMP_DIR="/tmp/telegram-bot-api"
@@ -29,6 +29,8 @@ RUN addgroup -g 101 -S telegram-bot-api \
  && chmod 700 ${TELEGRAM_TEMP_DIR}
 USER telegram-bot-api:telegram-bot-api
 
-HEALTHCHECK CMD nc -z localhost 8081
+# connect to 127.0.0.1 rather than localhost: the server listens on IPv4 only, while localhost
+# resolves to ::1 first. busybox nc has no -z, so open a connection and close it immediately
+HEALTHCHECK CMD nc -w 1 127.0.0.1 ${TELEGRAM_PORT:-8081} </dev/null
 EXPOSE 8081/tcp 8082/tcp
 ENTRYPOINT ["/docker-entrypoint.sh"]
