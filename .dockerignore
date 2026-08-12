@@ -3,3 +3,11 @@ README.md
 LICENSE*.txt
 build.html
 
+# not copied by the Dockerfile, but otherwise sent as build context
+.git
+.cache
+.vscode
+bin
+build
+icons
+tdlight-api-openapi.yaml

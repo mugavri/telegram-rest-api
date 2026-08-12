@@ -1,12 +1,12 @@
-FROM alpine:3.12 as build
+FROM alpine:3.12 AS build
 
 RUN apk add --no-cache --update alpine-sdk linux-headers git zlib-dev openssl-dev gperf cmake
 
 WORKDIR /root/DEV/telegram-rest-api
 
 COPY CMakeLists.txt /root/DEV/telegram-rest-api
-ADD td /root/DEV/telegram-rest-api/td
-ADD telegram-bot-api /root/DEV/telegram-rest-api/telegram-bot-api
+COPY td /root/DEV/telegram-rest-api/td
+COPY telegram-bot-api /root/DEV/telegram-rest-api/telegram-bot-api
 RUN mkdir -p build \
  && cd build \
  && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX:PATH=.. .. \
