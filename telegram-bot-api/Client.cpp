@@ -22056,7 +22056,9 @@ void Client::add_update_business_messages_deleted(object_ptr<td_api::updateBusin
 
 void Client::add_update_deleted_messages(const td_api::updateDeleteMessages *update) {
   CHECK(update != nullptr);
-  auto webhook_queue_id = update->chat_id_ + (static_cast<int64>(15) << 33);
+  // 15 << 33 is taken by upstream's stopped_message_generation since 10.3; sharing a queue with it
+  // would let a retrying deleted_messages delivery delay the time-sensitive stop updates
+  auto webhook_queue_id = update->chat_id_ + (static_cast<int64>(16) << 33);
   add_update(UpdateType::DeletedMessages, JsonDeletedMessages(update, this), 86400, webhook_queue_id);
 }
 

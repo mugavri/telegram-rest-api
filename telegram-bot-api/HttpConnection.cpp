@@ -216,7 +216,9 @@ void HttpConnection::handle_file_request(td::Parser &url_path_parser) {
     return send_http_error(400, "Bad Request: Please use the correct api endpoint for bots or users");
   }
 
-  auto base_dir = parameters_->working_directory_ +
+  // downloaded files live under files_directory_ since --files-dir was added; it equals
+  // working_directory_ unless the option is set
+  auto base_dir = parameters_->files_directory_ +
                   get_token_directory(token, is_test_dc, parameters_->allow_colon_in_filenames_);
   auto r_base_dir_real = td::realpath(base_dir);
   if (r_base_dir_real.is_error()) {
